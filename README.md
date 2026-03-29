@@ -45,6 +45,15 @@ github, filesystem, memory, sequential-thinking, playwright, context7, exa-web-s
 
 Experimental multi-agent coordination enabled for parallel task execution and consensus-based decision making.
 
+### Shell Configuration
+
+- **Mise** -- single tool manager for all runtimes (node, python, go, rust, bun, java). Replaces nvm, pyenv, rustup, etc. with one `mise.toml`.
+- **Starship** -- gruvbox dark prompt with polyglot language segments
+- **ZSH plugins** -- autosuggestions + syntax highlighting
+- **Dev aliases** -- Claude Code (`cc`, `ccr`, `ccd`), git (`gs`, `gd`, `gl`), Docker (`dc`, `dcu`), Kubernetes (`k`, `kgp`, `kl`), Mise (`mi`, `mu`, `ml`)
+
+Use `--skip-shell` to skip, or run standalone: `bash shell/setup.sh`.
+
 ## External Plugins Auto-Installed
 
 The `--full` flag clones and configures these plugins:
@@ -68,6 +77,7 @@ bash install.sh --user          # User-level agents only
 bash install.sh --minimal       # Agents + CLAUDE.md
 bash install.sh --agents        # 7 agents only
 bash install.sh --skip-plugins  # Full but skip plugin cloning
+bash install.sh --skip-shell    # Full but skip ZSH configuration
 bash install.sh --dry-run       # Preview without changes
 bash install.sh --uninstall     # Clean removal
 ```

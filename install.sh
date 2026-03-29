@@ -137,13 +137,14 @@ PROJECT_AGENTS=(delavalom-k8s-ops delavalom-data-eng delavalom-frontend delavalo
 MODE="full"
 DRY_RUN=false
 SKIP_PLUGINS=false
+SKIP_SHELL=false
 PROJECT_TARGET=""
 
 print_help() {
     echo "Usage: bash install.sh [MODE] [OPTIONS]"
     echo ""
     echo "Modes (pick one):"
-    echo "  --full             Full install: agents + skills + hooks + MCP + settings + plugins (default)"
+    echo "  --full             Full install: agents + skills + hooks + MCP + settings + plugins + shell (default)"
     echo "  --project [PATH]   Copy stack into another project's .claude/ directory"
     echo "  --user             Install user-level agents to ~/.claude/agents/ only"
     echo "  --minimal          Agents + CLAUDE.md only, no plugins"
@@ -153,6 +154,7 @@ print_help() {
     echo "Options:"
     echo "  --dry-run          Show what would be installed without doing it"
     echo "  --skip-plugins     Full install but skip external plugin cloning"
+    echo "  --skip-shell       Full install but skip shell/ZSH configuration"
     echo "  --help, -h         Show this help message"
     echo ""
     echo "Examples:"
@@ -190,6 +192,8 @@ while [[ $# -gt 0 ]]; do
             DRY_RUN=true; shift ;;
         --skip-plugins)
             SKIP_PLUGINS=true; shift ;;
+        --skip-shell)
+            SKIP_SHELL=true; shift ;;
         --help|-h)
             print_help ;;
         *)
@@ -485,6 +489,123 @@ install_plugins() {
 }
 
 # ============================================================
+# Install: shell configuration (starship + zsh)
+# ============================================================
+
+install_shell() {
+    log_step "Installing shell configuration..."
+
+    local shell_dir="${SCRIPT_DIR}/shell"
+
+    if [[ ! -d "$shell_dir" ]]; then
+        log_warn "shell/ directory not found -- skipping shell setup"
+        return
+    fi
+
+    # Install mise (single tool manager for all runtimes)
+    if command -v mise &>/dev/null || [[ -x "$HOME/.local/bin/mise" ]]; then
+        local mise_ver
+        mise_ver=$("$HOME/.local/bin/mise" --version 2>/dev/null || mise --version 2>/dev/null || echo "unknown")
+        log_ok "mise already installed: ${mise_ver}"
+    else
+        if $DRY_RUN; then
+            log_dry "Would install mise via curl https://mise.run"
+        else
+            log_step "Installing mise (tool manager for node, python, go, rust, bun, java)..."
+            curl -sSf https://mise.run | sh 2>/dev/null && log_ok "mise installed" || log_warn "mise install failed -- install manually: curl https://mise.run | sh"
+        fi
+    fi
+
+    # Copy mise.toml as global config
+    local mise_toml="${SCRIPT_DIR}/../mise.toml"
+    local global_mise="${HOME}/.config/mise/config.toml"
+
+    if [[ -f "$mise_toml" ]]; then
+        if $DRY_RUN; then
+            log_dry "Would copy mise.toml to ${global_mise}"
+        else
+            if [[ ! -f "$global_mise" ]]; then
+                run_mkdir "${HOME}/.config/mise"
+                cp "$mise_toml" "$global_mise"
+                log_ok "mise.toml installed as global config"
+            else
+                log_info "Global mise config already exists (${global_mise})"
+            fi
+        fi
+
+        # Install all tools from mise.toml
+        local mise_cmd=""
+        [[ -x "$HOME/.local/bin/mise" ]] && mise_cmd="$HOME/.local/bin/mise"
+        command -v mise &>/dev/null && mise_cmd="mise"
+
+        if [[ -n "$mise_cmd" ]]; then
+            if $DRY_RUN; then
+                log_dry "Would run: mise install (node, python, go, rust, bun, java)"
+            else
+                log_step "Installing runtimes via mise..."
+                "$mise_cmd" trust "$mise_toml" 2>/dev/null || true
+                "$mise_cmd" install --yes 2>/dev/null && log_ok "All runtimes installed via mise" || {
+                    log_warn "Some runtimes failed. Run 'mise install' manually after setup."
+                }
+            fi
+        fi
+    fi
+
+    # Install starship config
+    local starship_src="${shell_dir}/starship.toml"
+    local starship_dst="${HOME}/.config/starship.toml"
+
+    if [[ -f "$starship_src" ]]; then
+        if $DRY_RUN; then
+            log_dry "Would install starship.toml to ${starship_dst}"
+        else
+            run_mkdir "${HOME}/.config"
+            if [[ -f "$starship_dst" ]]; then
+                if ! diff -q "$starship_src" "$starship_dst" &>/dev/null; then
+                    cp "$starship_dst" "${starship_dst}.bak"
+                    log_info "Backed up existing starship.toml"
+                fi
+            fi
+            cp "$starship_src" "$starship_dst"
+            log_ok "starship.toml installed (gruvbox dark)"
+        fi
+    fi
+
+    # Add source line to .zshrc
+    local zshrc="${HOME}/.zshrc"
+    local source_line="source \"${shell_dir}/delavalom.zsh\""
+    local marker="# delavalom-stack shell config"
+
+    if [[ -f "$zshrc" ]] && grep -qF "$marker" "$zshrc"; then
+        log_ok ".zshrc already configured"
+    else
+        if $DRY_RUN; then
+            log_dry "Would add source line to ${zshrc}"
+        else
+            {
+                echo ""
+                echo "$marker"
+                echo "$source_line"
+            } >> "$zshrc"
+            log_ok "Added delavalom.zsh source line to .zshrc"
+        fi
+    fi
+
+    # Check for remaining brew dependencies (starship can also be installed via mise)
+    local missing_deps=()
+    command -v starship &>/dev/null || missing_deps+=(starship)
+    if command -v brew &>/dev/null; then
+        brew list zsh-autosuggestions &>/dev/null || missing_deps+=(zsh-autosuggestions)
+        brew list zsh-syntax-highlighting &>/dev/null || missing_deps+=(zsh-syntax-highlighting)
+    fi
+
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
+        log_warn "Missing shell deps: ${missing_deps[*]}"
+        log_info "Install with: brew install ${missing_deps[*]}"
+    fi
+}
+
+# ============================================================
 # --project mode: copy stack into another project
 # ============================================================
 
@@ -602,6 +723,11 @@ case "$MODE" in
             install_plugins
         else
             log_info "Skipping external plugins (--skip-plugins)"
+        fi
+        if ! $SKIP_SHELL; then
+            install_shell
+        else
+            log_info "Skipping shell configuration (--skip-shell)"
         fi
         ;;
     project)

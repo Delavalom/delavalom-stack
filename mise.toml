@@ -1,0 +1,27 @@
+# Delavalom Stack — Mise Tool Configuration
+# https://mise.jdx.dev
+#
+# Mise manages ALL language runtimes and dev tools.
+# Run `mise install` to install everything, or `mise use --global <tool>` to add more.
+
+min_version = "2024.11.1"
+
+[tools]
+node = "lts"
+python = "3.12"
+go = "latest"
+rust = "latest"
+bun = "latest"
+java = "zulu-17"
+
+# CLI tools installed via mise
+usage = "latest"
+
+[env]
+GOPATH = "{{env.HOME}}/go"
+GOBIN = "{{env.HOME}}/go/bin"
+BUN_INSTALL = "{{env.HOME}}/.bun"
+
+[settings]
+# Automatically install missing tools when entering a directory
+auto_install = true
