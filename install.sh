@@ -126,6 +126,12 @@ PLUGIN_URLS=(
     "https://github.com/affaan-m/everything-claude-code.git"
 )
 
+# Plugins handled by the Claude Code marketplace (auto-update, no manual clone needed)
+MARKETPLACE_PLUGINS=(superpowers impeccable everything-claude-code marketingskills)
+
+# Plugins that only exist as manual clones (marketplace doesn't have them)
+CLONE_ONLY_PLUGINS=(gstack oh-my-claudecode no-use-effect)
+
 # Agents by scope
 USER_AGENTS=(delavalom-reviewer delavalom-debugger delavalom-researcher)
 PROJECT_AGENTS=(delavalom-k8s-ops delavalom-data-eng delavalom-frontend delavalom-content)
@@ -145,6 +151,7 @@ print_help() {
     echo ""
     echo "Modes (pick one):"
     echo "  --full             Full install: agents + skills + hooks + MCP + settings + plugins + shell (default)"
+    echo "  --reset            Clean reset: uninstall duplicates, reinstall with marketplace-first strategy"
     echo "  --project [PATH]   Copy stack into another project's .claude/ directory"
     echo "  --user             Install user-level agents to ~/.claude/agents/ only"
     echo "  --minimal          Agents + CLAUDE.md only, no plugins"
@@ -159,6 +166,8 @@ print_help() {
     echo ""
     echo "Examples:"
     echo "  bash install.sh                          # Full install with all plugins"
+    echo "  bash install.sh --reset                  # Clean reset, marketplace-first (no duplicates)"
+    echo "  bash install.sh --reset --dry-run        # Preview what --reset would do"
     echo "  bash install.sh --full --skip-plugins    # Full install, no external plugins"
     echo "  bash install.sh --project /path/to/app   # Copy stack into another project"
     echo "  bash install.sh --project                # Copy stack into current directory"
@@ -171,6 +180,8 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         --full)
             MODE="full"; shift ;;
+        --reset)
+            MODE="reset"; shift ;;
         --project)
             MODE="project"
             shift
@@ -707,6 +718,110 @@ do_project_install() {
 }
 
 # ============================================================
+# Reset: marketplace-first clean install
+# ============================================================
+
+do_reset() {
+    print_banner
+    log_step "RESET MODE — marketplace-first, zero duplication"
+    echo ""
+
+    # Step 1: Remove manual clones that the marketplace already provides
+    log_step "Step 1/4: Removing manual clones that overlap with marketplace..."
+    for name in "${MARKETPLACE_PLUGINS[@]}"; do
+        local dest="${SKILLS_DIR}/${name}"
+        if [[ -d "$dest" ]]; then
+            run_rm_r "$dest"
+            log_ok "Removed duplicate manual clone: ${name}"
+        else
+            log_info "Already clean: ${name}"
+        fi
+    done
+
+    # Step 2: Remove stale symlinks (gstack symlinks, etc.)
+    log_step "Step 2/4: Cleaning stale symlinks in ~/.claude/skills/..."
+    if $DRY_RUN; then
+        log_dry "Would remove broken symlinks from ${SKILLS_DIR}"
+    else
+        local stale_count=0
+        while IFS= read -r -d '' link; do
+            if [[ ! -e "$link" ]]; then
+                rm -f "$link"
+                log_ok "Removed stale symlink: $(basename "$link")"
+                stale_count=$((stale_count + 1))
+            fi
+        done < <(find "$SKILLS_DIR" -maxdepth 1 -type l -print0 2>/dev/null)
+        if [[ $stale_count -eq 0 ]]; then
+            log_info "No stale symlinks found"
+        fi
+    fi
+
+    # Step 3: Reinstall clone-only plugins (gstack, oh-my-claudecode, no-use-effect)
+    log_step "Step 3/4: Installing clone-only plugins (not on marketplace)..."
+    local clone_i
+    for clone_i in "${!PLUGIN_NAMES[@]}"; do
+        local name="${PLUGIN_NAMES[$clone_i]}"
+        local url="${PLUGIN_URLS[$clone_i]}"
+        local dest="${SKILLS_DIR}/${name}"
+
+        # Skip marketplace plugins — they're handled by `claude plugins install`
+        local is_marketplace=false
+        for mp in "${MARKETPLACE_PLUGINS[@]}"; do
+            [[ "$name" == "$mp" ]] && is_marketplace=true && break
+        done
+        if $is_marketplace; then
+            continue
+        fi
+
+        if [[ -d "$dest" ]]; then
+            log_ok "Already installed: ${name} (skipped)"
+            INSTALLED_PLUGINS=$((INSTALLED_PLUGINS + 1))
+            continue
+        fi
+
+        if $DRY_RUN; then
+            log_dry "git clone --depth 1 ${url} ${dest}"
+            INSTALLED_PLUGINS=$((INSTALLED_PLUGINS + 1))
+            continue
+        fi
+
+        echo -e "  ${CYAN}Cloning ${name}...${NC}"
+        if git clone --depth 1 "$url" "$dest" 2>/dev/null; then
+            log_ok "Installed: ${name}"
+            INSTALLED_PLUGINS=$((INSTALLED_PLUGINS + 1))
+
+            if [[ "$name" == "gstack" ]] && [[ -x "${dest}/setup" ]]; then
+                echo -e "  ${CYAN}Running gstack setup...${NC}"
+                (cd "$dest" && ./setup) 2>/dev/null && log_ok "gstack setup complete" || log_warn "gstack setup failed"
+            fi
+        else
+            log_err "Failed to clone: ${name}"
+            FAILED_PLUGINS=$((FAILED_PLUGINS + 1))
+            PLUGIN_FAILURES+=("$name")
+        fi
+    done
+
+    # Step 4: Reinstall stack (agents, CLAUDE.md, hooks, MCP, settings, shell)
+    log_step "Step 4/4: Reinstalling delavalom stack components..."
+    install_user_agents
+    install_project_agents
+    install_claude_md
+    install_custom_skills
+    install_hooks
+    install_mcp
+    install_settings
+    if ! $SKIP_SHELL; then
+        install_shell
+    else
+        log_info "Skipping shell configuration (--skip-shell)"
+    fi
+
+    echo ""
+    log_ok "Reset complete — marketplace handles: ${MARKETPLACE_PLUGINS[*]}"
+    log_ok "Manual clones handle: ${CLONE_ONLY_PLUGINS[*]}"
+}
+
+# ============================================================
 # Mode dispatch
 # ============================================================
 
@@ -729,6 +844,9 @@ case "$MODE" in
         else
             log_info "Skipping shell configuration (--skip-shell)"
         fi
+        ;;
+    reset)
+        do_reset
         ;;
     project)
         do_project_install

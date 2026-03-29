@@ -72,6 +72,7 @@ The `--full` flag clones and configures these plugins:
 
 ```bash
 bash install.sh --full          # Everything + plugins (default)
+bash install.sh --reset         # Clean reset: marketplace-first, zero duplication
 bash install.sh --project /path # Copy stack into another project
 bash install.sh --user          # User-level agents only
 bash install.sh --minimal       # Agents + CLAUDE.md
@@ -81,6 +82,25 @@ bash install.sh --skip-shell    # Full but skip ZSH configuration
 bash install.sh --dry-run       # Preview without changes
 bash install.sh --uninstall     # Clean removal
 ```
+
+### Reset Mode (Marketplace-First)
+
+Use `--reset` when you have plugins installed via both the Claude Code marketplace (`claude plugins install`) and manual git clones (`install.sh --full`). This eliminates duplication by:
+
+1. **Removing manual clones** for plugins the marketplace already provides (superpowers, impeccable, everything-claude-code, marketingskills)
+2. **Cleaning stale symlinks** left behind in `~/.claude/skills/`
+3. **Reinstalling clone-only plugins** that the marketplace doesn't have (gstack, oh-my-claudecode, no-use-effect)
+4. **Reinstalling stack components** (agents, CLAUDE.md, hooks, MCP, settings, shell)
+
+```bash
+# Preview first
+bash install.sh --reset --dry-run
+
+# Run it
+bash install.sh --reset
+```
+
+**Why marketplace-first?** Marketplace plugins auto-update. Manual clones freeze at the commit you cloned. By letting the marketplace handle the big plugins, you get updates without re-running the installer.
 
 ## The Delavalom Pipeline
 
