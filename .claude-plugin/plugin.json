@@ -1,0 +1,41 @@
+{
+  "name": "delavalom-stack",
+  "version": "2.0.0",
+  "description": "Shared Claude Code development workspace — 7 custom sub-agents, 4 domain skills, governance hooks, MCP configs, and auto-installs 7 curated external plugins. The Delavalom Pipeline: THINK-RESEARCH-PLAN-BUILD-REVIEW-SECURE-SHIP-REFLECT.",
+  "author": {
+    "name": "Luis Arvelo",
+    "email": "hi@delavalom.com"
+  },
+  "homepage": "https://github.com/delavalom/delavalom-stack",
+  "repository": "https://github.com/delavalom/delavalom-stack",
+  "license": "MIT",
+  "keywords": [
+    "workflow",
+    "sub-agents",
+    "agent-teams",
+    "orchestration",
+    "multi-domain",
+    "engineering",
+    "data-engineering",
+    "marketing",
+    "kubernetes",
+    "polyglot",
+    "content-distribution",
+    "code-review",
+    "TDD",
+    "installer"
+  ],
+  "skills": "./.claude/skills/",
+  "agents": "./.claude/agents/",
+  "dependencies": {
+    "external_plugins": [
+      "superpowers",
+      "gstack",
+      "impeccable",
+      "oh-my-claudecode",
+      "marketingskills",
+      "no-use-effect",
+      "everything-claude-code"
+    ]
+  }
+}

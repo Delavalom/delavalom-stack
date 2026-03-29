@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delavalom Stack — Deep Research Report</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242836;
+    --border: #2e3347;
+    --text: #e2e5f0;
+    --text-muted: #8b90a5;
+    --accent: #6c63ff;
+    --accent2: #00d4aa;
+    --accent3: #ff6b8a;
+    --accent4: #ffa64d;
+    --accent5: #4dc9f6;
+    --green: #00d4aa;
+    --red: #ff6b8a;
+    --yellow: #ffa64d;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    overflow-x: hidden;
+  }
+  /* Sidebar Nav */
+  .sidebar {
+    position: fixed; left:0; top:0; bottom:0; width:280px;
+    background: var(--surface); border-right: 1px solid var(--border);
+    overflow-y: auto; z-index: 100; padding: 24px 0;
+    transition: transform .3s;
+  }
+  .sidebar.collapsed { transform: translateX(-280px); }
+  .sidebar-logo { padding: 0 20px 20px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+  .sidebar-logo h2 { font-size: 16px; color: var(--accent); letter-spacing: .5px; }
+  .sidebar-logo small { color: var(--text-muted); font-size: 11px; }
+  .nav-section { padding: 8px 20px; }
+  .nav-section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 6px; }
+  .nav-link {
+    display: block; padding: 7px 12px; border-radius: 6px;
+    color: var(--text-muted); text-decoration: none; font-size: 13px;
+    transition: all .15s;
+  }
+  .nav-link:hover, .nav-link.active { background: var(--surface2); color: var(--text); }
+  .nav-link .badge {
+    float: right; background: var(--accent); color: #fff; font-size: 10px;
+    padding: 1px 6px; border-radius: 10px;
+  }
+  /* Main Content */
+  .main { margin-left: 280px; padding: 40px 48px 80px; max-width: 1100px; }
+  .toggle-btn {
+    display: none; position: fixed; top: 12px; left: 12px; z-index: 200;
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 18px;
+  }
+  @media (max-width: 900px) {
+    .sidebar { transform: translateX(-280px); }
+    .sidebar.open { transform: translateX(0); }
+    .main { margin-left: 0; padding: 24px; }
+    .toggle-btn { display: block; }
+  }
+  /* Hero */
+  .hero {
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
+    border-radius: 16px; padding: 48px; margin-bottom: 40px;
+    border: 1px solid rgba(108,99,255,.3);
+  }
+  .hero h1 { font-size: 32px; margin-bottom: 8px; }
+  .hero h1 span { color: var(--accent); }
+  .hero p { color: var(--text-muted); font-size: 15px; max-width: 700px; }
+  .hero-stats { display: flex; gap: 32px; margin-top: 24px; flex-wrap: wrap; }
+  .hero-stat { text-align: center; }
+  .hero-stat .num { font-size: 36px; font-weight: 700; color: var(--accent2); }
+  .hero-stat .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+  /* Section */
+  section { margin-bottom: 48px; scroll-margin-top: 24px; }
+  section > h2 {
+    font-size: 22px; margin-bottom: 6px; padding-bottom: 10px;
+    border-bottom: 2px solid var(--accent); display: inline-block;
+  }
+  section > .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+  h3 { font-size: 17px; margin: 24px 0 10px; color: var(--accent2); }
+  h4 { font-size: 14px; margin: 16px 0 6px; color: var(--accent4); }
+  p, li { font-size: 14px; }
+  p { margin-bottom: 12px; }
+  /* Cards */
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin: 16px 0; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; transition: border-color .2s;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .card-desc { color: var(--text-muted); font-size: 13px; margin-bottom: 10px; }
+  .card-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tag {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-size: 11px; font-weight: 500;
+  }
+  .tag-lang { background: rgba(108,99,255,.15); color: var(--accent); }
+  .tag-type { background: rgba(0,212,170,.12); color: var(--green); }
+  .tag-warn { background: rgba(255,107,138,.12); color: var(--red); }
+  .tag-info { background: rgba(77,201,246,.12); color: var(--accent5); }
+  .tag-star { background: rgba(255,166,77,.12); color: var(--yellow); }
+  /* Tables */
+  .table-wrap { overflow-x: auto; margin: 16px 0; border-radius: 10px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--surface2); text-align: left; padding: 10px 14px; font-weight: 600; white-space: nowrap; }
+  td { padding: 10px 14px; border-top: 1px solid var(--border); }
+  tr:hover td { background: rgba(108,99,255,.04); }
+  /* Collapsibles */
+  details { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin: 12px 0; }
+  summary {
+    padding: 14px 18px; cursor: pointer; font-weight: 600; font-size: 14px;
+    list-style: none; display: flex; align-items: center; gap: 8px;
+  }
+  summary::before { content: "▸"; transition: transform .2s; display: inline-block; }
+  details[open] summary::before { transform: rotate(90deg); }
+  .detail-body { padding: 0 18px 18px; }
+  /* Progress bars */
+  .progress-bar { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin: 4px 0; }
+  .progress-fill { height: 100%; border-radius: 3px; }
+  /* Recommendation box */
+  .rec-box {
+    background: linear-gradient(135deg, rgba(0,212,170,.08), rgba(108,99,255,.08));
+    border: 1px solid rgba(0,212,170,.25); border-radius: 12px;
+    padding: 20px; margin: 16px 0;
+  }
+  .rec-box h4 { color: var(--green); margin-top: 0; }
+  .rec-box p { margin-bottom: 6px; }
+  /* Score chips */
+  .score { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 14px; }
+  .score.high { color: var(--green); }
+  .score.mid { color: var(--yellow); }
+  .score.low { color: var(--red); }
+  /* Tabs */
+  .tabs { display: flex; gap: 2px; margin-bottom: -1px; position: relative; z-index: 1; }
+  .tab-btn {
+    padding: 10px 20px; background: var(--surface); border: 1px solid var(--border);
+    border-bottom: none; border-radius: 8px 8px 0 0; cursor: pointer;
+    color: var(--text-muted); font-size: 13px; font-weight: 500; transition: all .15s;
+  }
+  .tab-btn.active { background: var(--surface2); color: var(--text); border-color: var(--accent); }
+  .tab-content {
+    display: none; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 0 8px 8px 8px; padding: 20px;
+  }
+  .tab-content.active { display: block; }
+  /* Filter */
+  .filter-bar { display: flex; gap: 8px; margin: 16px 0; flex-wrap: wrap; }
+  .filter-btn {
+    padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-muted); cursor: pointer;
+    font-size: 12px; transition: all .15s;
+  }
+  .filter-btn:hover, .filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  /* Lists */
+  ul { padding-left: 20px; margin: 8px 0; }
+  li { margin-bottom: 4px; }
+  /* Workflow diagram */
+  .flow-diagram {
+    display: flex; align-items: center; gap: 0; overflow-x: auto;
+    padding: 20px 0; margin: 16px 0;
+  }
+  .flow-step {
+    background: var(--surface); border: 2px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; min-width: 140px; text-align: center; flex-shrink: 0;
+  }
+  .flow-step.active { border-color: var(--accent); box-shadow: 0 0 20px rgba(108,99,255,.2); }
+  .flow-step .step-name { font-weight: 700; font-size: 13px; }
+  .flow-step .step-tool { color: var(--text-muted); font-size: 11px; margin-top: 4px; }
+  .flow-arrow { font-size: 20px; color: var(--accent); margin: 0 4px; flex-shrink: 0; }
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .code { background: var(--surface2); padding: 2px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .highlight { background: rgba(108,99,255,.15); padding: 16px; border-radius: 8px; border-left: 3px solid var(--accent); margin: 12px 0; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar Navigation -->
+<button class="toggle-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <h2>DELAVALOM STACK</h2>
+    <small>Deep Research Report — March 28, 2026</small>
+  </div>
+  <div class="nav-section">
+    <div class="nav-section-title">Overview</div>
+    <a class="nav-link" href="#hero">Executive Summary</a>
+    <a class="nav-link" href="#inventory">Full Inventory <span class="badge">24</span></a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-section-title">Repository Deep Dives</div>
+    <a class="nav-link" href="#agent-orchestration">Agent Orchestration <span class="badge">5</span></a>
+    <a class="nav-link" href="#skill-collections">Skill Collections <span class="badge">8</span></a>
+    <a class="nav-link" href="#data-engineering">Data & Infrastructure <span class="badge">4</span></a>
+    <a class="nav-link" href="#devtools">Dev Tools & Frameworks <span class="badge">4</span></a>
+    <a class="nav-link" href="#domain-specific">Domain-Specific <span class="badge">3</span></a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-section-title">Analysis</div>
+    <a class="nav-link" href="#overlap">Overlap & Redundancy Map</a>
+    <a class="nav-link" href="#scoring">Quality Scoring Matrix</a>
+    <a class="nav-link" href="#gap-analysis">Gap Analysis</a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-section-title">Recommendations</div>
+    <a class="nav-link" href="#keep">Skills to Keep & Use</a>
+    <a class="nav-link" href="#drop">Skills to Drop or Merge</a>
+    <a class="nav-link" href="#create">Skills to Create</a>
+    <a class="nav-link" href="#workflow">Optimal Workflow Design</a>
+    <a class="nav-link" href="#architecture">Architecture Blueprint</a>
+  </div>
+  <div class="nav-section">
+    <div class="nav-section-title">New: Agents & Teams</div>
+    <a class="nav-link" href="#subagents">Sub-Agents (Layer 12) <span class="badge">7</span></a>
+    <a class="nav-link" href="#agentteams">Agent Teams (Layer 13)</a>
+    <a class="nav-link" href="#installer">One-Click Installer</a>
+  </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main">
+
+  <!-- Hero Section -->
+  <div class="hero" id="hero">
+    <h1>The <span>Delavalom</span> Stack Report</h1>
+    <p>A comprehensive deep-dive into every repository, skill, agent, hook, MCP config, and workflow pattern in Luis Arvelo's development ecosystem — distilled into actionable intelligence for building the ultimate Claude Code power-user workflow.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">24</div><div class="label">Repositories</div></div>
+      <div class="hero-stat"><div class="num">200+</div><div class="label">Skills</div></div>
+      <div class="hero-stat"><div class="num">76</div><div class="label">CLAUDE.md Files</div></div>
+      <div class="hero-stat"><div class="num">24</div><div class="label">MCP Servers</div></div>
+      <div class="hero-stat"><div class="num">13</div><div class="label">Plugins</div></div>
+      <div class="hero-stat"><div class="num">6+</div><div class="label">Hook Systems</div></div>
+    </div>
+  </div>
+
+  <!-- SECTION: Full Inventory -->
+  <section id="inventory">
+    <h2>Full Repository Inventory</h2>
+    <p class="subtitle">Every project in the Delavalom Stack, categorized by primary function</p>
+
+    <div class="filter-bar">
+      <button class="filter-btn active" onclick="filterCards('all', this)">All (24)</button>
+      <button class="filter-btn" onclick="filterCards('orchestration', this)">Orchestration</button>
+      <button class="filter-btn" onclick="filterCards('skills', this)">Skills</button>
+      <button class="filter-btn" onclick="filterCards('data', this)">Data/Infra</button>
+      <button class="filter-btn" onclick="filterCards('devtools', this)">Dev Tools</button>
+      <button class="filter-btn" onclick="filterCards('domain', this)">Domain</button>
+    </div>
+
+    <div class="card-grid" id="card-grid">
+
+      <!-- Orchestration -->
+      <div class="card" data-cat="orchestration">
+        <div class="card-title">oh-my-claudecode <span class="tag tag-star">v4.9.1</span></div>
+        <div class="card-desc">Multi-agent orchestration layer — 32 specialized agents, smart model routing (Haiku → Opus), canonical staged pipeline, HUD statusline, 30-50% token savings.</div>
+        <div class="card-meta"><span class="tag tag-lang">TypeScript</span><span class="tag tag-type">Orchestrator</span></div>
+      </div>
+
+      <div class="card" data-cat="orchestration">
+        <div class="card-title">ruflo (claude-flow) <span class="tag tag-star">v3.5.48</span></div>
+        <div class="card-desc">Enterprise swarm intelligence — 60+ agents, mesh/hierarchical topologies, Raft/BFT consensus, AgentDB memory (150-12,500x faster), Q-Learning router, 9 RL algorithms.</div>
+        <div class="card-meta"><span class="tag tag-lang">TypeScript + Rust/WASM</span><span class="tag tag-type">Enterprise Orchestrator</span></div>
+      </div>
+
+      <div class="card" data-cat="orchestration">
+        <div class="card-title">OpenHands</div>
+        <div class="card-desc">AI-driven software development platform — autonomous coding agents, Docker/K8s orchestration, SWEBench 77.6 score. Used by TikTok, Amazon, Netflix, Google.</div>
+        <div class="card-meta"><span class="tag tag-lang">Python</span><span class="tag tag-type">Agent Platform</span><span class="tag tag-star">Enterprise</span></div>
+      </div>
+
+      <div class="card" data-cat="orchestration">
+        <div class="card-title">deer-flow (DeerFlow 2.0)</div>
+        <div class="card-desc">ByteDance super-agent harness — sub-agent orchestration, memory systems, sandboxes, extensible skills. GitHub Trending #1 (Feb 2026).</div>
+        <div class="card-meta"><span class="tag tag-lang">Python</span><span class="tag tag-type">Agent Harness</span><span class="tag tag-star">#1 Trending</span></div>
+      </div>
+
+      <div class="card" data-cat="orchestration">
+        <div class="card-title">gstack <span class="tag tag-star">28 skills</span></div>
+        <div class="card-desc">Full sprint workflow — Think → Plan → Build → Review → Test → Ship → Reflect. /office-hours, /review, /qa, /ship, /cso security, /canary monitoring, /retro.</div>
+        <div class="card-meta"><span class="tag tag-lang">TypeScript + Playwright</span><span class="tag tag-type">Workflow System</span></div>
+      </div>
+
+      <!-- Skill Collections -->
+      <div class="card" data-cat="skills">
+        <div class="card-title">everything-claude-code <span class="tag tag-star">50K+ ★</span></div>
+        <div class="card-desc">Hackathon winner — 100+ skills, 12+ agents, 12 language ecosystems, security scanning, token optimization, continuous learning, cross-platform installer.</div>
+        <div class="card-meta"><span class="tag tag-lang">Multi-lang</span><span class="tag tag-type">Skill Megapack</span><span class="tag tag-star">Hackathon Winner</span></div>
+      </div>
+
+      <div class="card" data-cat="skills">
+        <div class="card-title">awesome-claude-code</div>
+        <div class="card-desc">Curated index of 100+ agent skills, workflow guides, tooling ecosystem, CLAUDE.md library for 20+ languages. Multiple README formats.</div>
+        <div class="card-meta"><span class="tag tag-lang">Python + Markdown</span><span class="tag tag-type">Discovery Index</span></div>
+      </div>
+
+      <div class="card" data-cat="skills">
+        <div class="card-title">awesome-claude-skills</div>
+        <div class="card-desc">100+ skills across 12 categories — document processing, dev tools, data analysis, marketing, Composio integration (500+ SaaS apps). 20K+ developers.</div>
+        <div class="card-meta"><span class="tag tag-lang">Markdown</span><span class="tag tag-type">Skill Collection</span></div>
+      </div>
+
+      <div class="card" data-cat="skills">
+        <div class="card-title">Agent-Skills-for-Context-Engineering</div>
+        <div class="card-desc">14 foundational skills for context engineering — degradation patterns, compression, multi-agent patterns, memory systems, tool design, BDI mental states. Cited in academic research.</div>
+        <div class="card-meta"><span class="tag tag-lang">Platform-agnostic</span><span class="tag tag-type">Framework</span><span class="tag tag-star">Academic</span></div>
+      </div>
+
+      <div class="card" data-cat="skills">
+        <div class="card-title">superpowers <span class="tag tag-star">v5.0.6</span></div>
+        <div class="card-desc">TDD, systematic debugging, subagent-driven development, git worktrees, code review loops, parallel agent dispatch. Prescriptive methodology layer.</div>
+        <div class="card-meta"><span class="tag tag-lang">Cross-platform</span><span class="tag tag-type">Methodology</span></div>
+      </div>
+
+      <div class="card" data-cat="skills">
+        <div class="card-title">claude-mem <span class="tag tag-star">v10.4.1</span></div>
+        <div class="card-desc">Persistent memory compression — automatic context preservation, semantic summarization, JSONL memory format, progressive disclosure, Discord/Slack/Telegram feeds.</div>
+        <div class="card-meta"><span class="tag tag-lang">TypeScript</span><span class="tag tag-type">Memory System</span></div>
+      </div>
+
+      <div class="card" data-cat="skills">
+        <div class="card-title">claude-scientific-skills</div>
+        <div class="card-desc">170+ scientific skills — biology, chemistry, medicine, physics, materials science. 250+ databases (PubMed, ChEMBL, UniProt), 60+ Python package skills.</div>
+        <div class="card-meta"><span class="tag tag-lang">Python</span><span class="tag tag-type">Scientific</span><span class="tag tag-info">170+ skills</span></div>
+      </div>
+
+      <div class="card" data-cat="skills">
+        <div class="card-title">marketingskills</div>
+        <div class="card-desc">34 interconnected marketing skills — SEO, CRO, copywriting, cold email, paid ads, pricing strategy, churn prevention, RevOps, sales enablement.</div>
+        <div class="card-meta"><span class="tag tag-lang">Markdown</span><span class="tag tag-type">Marketing</span><span class="tag tag-info">34 skills</span></div>
+      </div>
+
+      <div class="card" data-cat="skills">
+        <div class="card-title">skills (OpenAI Codex)</div>
+        <div class="card-desc">Official OpenAI Codex skills — 70+ curated (Cloudflare, Figma, GitHub, Jupyter, Linear, Jira, Notion, PDF, Playwright, security).</div>
+        <div class="card-meta"><span class="tag tag-lang">Multi-lang</span><span class="tag tag-type">Official</span></div>
+      </div>
+
+      <!-- Data/Infrastructure -->
+      <div class="card" data-cat="data">
+        <div class="card-title">RuVector</div>
+        <div class="card-desc">Self-learning vector DB + agentic OS — GNN search improving per query, Graph RAG, DiskANN, ColBERT, 50+ attention mechanisms, PostGres drop-in, post-quantum crypto.</div>
+        <div class="card-meta"><span class="tag tag-lang">Rust</span><span class="tag tag-type">Vector DB</span><span class="tag tag-star">CES 2026 Award</span></div>
+      </div>
+
+      <div class="card" data-cat="data">
+        <div class="card-title">bruin</div>
+        <div class="card-desc">Unified data pipeline — SQL/Python/R transforms, data quality checks, Snowflake/BigQuery/Redshift support, Jinja templating, GitHub Actions CI/CD.</div>
+        <div class="card-meta"><span class="tag tag-lang">Go</span><span class="tag tag-type">Data Pipeline</span></div>
+      </div>
+
+      <div class="card" data-cat="data">
+        <div class="card-title">ai-hedge-fund</div>
+        <div class="card-desc">Multi-agent financial analysis — 18 agents (Buffett, Wood, Ackman, Burry personas), LangGraph orchestration, backtesting, web UI.</div>
+        <div class="card-meta"><span class="tag tag-lang">Python</span><span class="tag tag-type">Finance/ML</span></div>
+      </div>
+
+      <div class="card" data-cat="data">
+        <div class="card-title">strix</div>
+        <div class="card-desc">Autonomous security testing — AI agents as ethical hackers, 25+ vulnerability categories, proof-of-concepts, GitHub Actions CI/CD, auto-fix PRs.</div>
+        <div class="card-meta"><span class="tag tag-lang">Python</span><span class="tag tag-type">Security</span><span class="tag tag-star">v0.8.3</span></div>
+      </div>
+
+      <!-- Dev Tools -->
+      <div class="card" data-cat="devtools">
+        <div class="card-title">impeccable <span class="tag tag-star">v1.6.0</span></div>
+        <div class="card-desc">Anti-generic design skills — 21 skills with 20 steering commands (/audit, /polish, /distill, /overdrive), explicit anti-patterns for AI-generated frontends.</div>
+        <div class="card-meta"><span class="tag tag-lang">TypeScript + Playwright</span><span class="tag tag-type">Design System</span></div>
+      </div>
+
+      <div class="card" data-cat="devtools">
+        <div class="card-title">no-use-effect</div>
+        <div class="card-desc">React anti-patterns enforcement — 5 strict rules replacing useEffect with proper state management (useMemo, React Query, event handlers).</div>
+        <div class="card-meta"><span class="tag tag-lang">React</span><span class="tag tag-type">Code Quality</span></div>
+      </div>
+
+      <div class="card" data-cat="devtools">
+        <div class="card-title">last30days-skill <span class="tag tag-star">v2.9.5</span></div>
+        <div class="card-desc">Real-time research aggregation — Reddit, X, YouTube, TikTok, HN, Polymarket, Bluesky across last 30 days. Compact/detailed modes.</div>
+        <div class="card-meta"><span class="tag tag-lang">Python</span><span class="tag tag-type">Research</span></div>
+      </div>
+
+      <div class="card" data-cat="domain">
+        <div class="card-title">create_optimized_agent_workflow.md</div>
+        <div class="card-desc">Reference guide for Subagents + Agent Teams — 3-phase workflow: Research/Design → Implementation → Review. Parallelization patterns.</div>
+        <div class="card-meta"><span class="tag tag-lang">Markdown</span><span class="tag tag-type">Reference</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- SECTION: Agent Orchestration Deep Dive -->
+  <section id="agent-orchestration">
+    <h2>Agent Orchestration Systems</h2>
+    <p class="subtitle">Five competing/complementary orchestration approaches — here's how they compare and where each excels</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>System</th>
+            <th>Agent Count</th>
+            <th>Architecture</th>
+            <th>Memory</th>
+            <th>Learning</th>
+            <th>Best For</th>
+            <th>Relevance</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>oh-my-claudecode</strong></td>
+            <td>32</td>
+            <td>Staged pipeline (plan→exec→verify→fix)</td>
+            <td>Session-based</td>
+            <td>Auto-learning from sessions</td>
+            <td>Daily Claude Code work</td>
+            <td><span class="score high">★★★★★</span></td>
+          </tr>
+          <tr>
+            <td><strong>ruflo</strong></td>
+            <td>60+</td>
+            <td>Mesh/hierarchical/ring/star topologies</td>
+            <td>AgentDB (vector)</td>
+            <td>9 RL algorithms, Q-Learning</td>
+            <td>Enterprise swarms, cross-platform</td>
+            <td><span class="score high">★★★★☆</span></td>
+          </tr>
+          <tr>
+            <td><strong>gstack</strong></td>
+            <td>28 (role-based)</td>
+            <td>Sprint cycle: Think→Ship→Reflect</td>
+            <td>Session + Playwright</td>
+            <td>Retrospectives</td>
+            <td>Full product sprints</td>
+            <td><span class="score high">★★★★★</span></td>
+          </tr>
+          <tr>
+            <td><strong>OpenHands</strong></td>
+            <td>SDK-based</td>
+            <td>Composable SDK + Docker sandbox</td>
+            <td>SQLAlchemy DB</td>
+            <td>SWEBench-tuned</td>
+            <td>Autonomous coding tasks</td>
+            <td><span class="score mid">★★★☆☆</span></td>
+          </tr>
+          <tr>
+            <td><strong>deer-flow</strong></td>
+            <td>Sub-agents</td>
+            <td>Hierarchical super-agent harness</td>
+            <td>Long-term memory</td>
+            <td>LangSmith traced</td>
+            <td>Complex research workflows</td>
+            <td><span class="score mid">★★★☆☆</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rec-box">
+      <h4>Recommendation: Layer, Don't Replace</h4>
+      <p><strong>Primary orchestrator:</strong> oh-my-claudecode — it's the most Claude Code-native, with smart routing and token savings. Use this for all daily work.</p>
+      <p><strong>Sprint workflow:</strong> gstack — layer its /review, /qa, /ship, /cso, /retro commands on top of OMC for structured product development.</p>
+      <p><strong>Enterprise/scaling:</strong> ruflo — activate only when you need swarm coordination across multiple Codex/Claude instances.</p>
+      <p><strong>Reference only:</strong> OpenHands and deer-flow are powerful but designed for standalone deployment, not Claude Code plugin use. Keep as reference architectures.</p>
+    </div>
+  </section>
+
+  <!-- SECTION: Skill Collections -->
+  <section id="skill-collections">
+    <h2>Skill Collections Analysis</h2>
+    <p class="subtitle">200+ skills across 8 collections — with significant overlap. Here's what matters.</p>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="openTab(event, 'tab-megapacks')">Megapacks</button>
+      <button class="tab-btn" onclick="openTab(event, 'tab-specialized')">Specialized</button>
+      <button class="tab-btn" onclick="openTab(event, 'tab-methodology')">Methodology</button>
+      <button class="tab-btn" onclick="openTab(event, 'tab-memory')">Memory & Context</button>
+    </div>
+
+    <div class="tab-content active" id="tab-megapacks">
+      <h4>everything-claude-code (ECC) vs awesome-claude-code vs awesome-claude-skills</h4>
+      <p>These three collections have ~40% skill overlap. ECC is the most complete and battle-tested (hackathon winner, 50K+ stars, 997 tests). The "awesome" repos are discovery indexes — valuable for finding new tools, but not for direct installation.</p>
+      <div class="highlight">
+        <strong>Verdict:</strong> Use ECC as your primary skill pack. Reference the awesome repos for discovery only. Don't install all three — the context bloat defeats the purpose.
+      </div>
+      <p><strong>Top ECC skills for your workflow:</strong> agentic-engineering, api-design, benchmark, browser-qa, canary-watch, claude-devfleet, architecture-decision-records, ai-regression-testing, autonomous-loops.</p>
+    </div>
+
+    <div class="tab-content" id="tab-specialized">
+      <h4>Domain-Specific Skill Collections</h4>
+      <p><strong>marketingskills (34 skills)</strong> — Directly relevant to your GTM work. The interconnected skill system (skills cross-reference each other) is well-designed. Key skills: seo-audit, ai-seo, copywriting, cold-email, email-sequence, launch-strategy, pricing-strategy, referral-program, marketing-psychology.</p>
+      <p><strong>claude-scientific-skills (170+)</strong> — Massive but niche. Unless you're doing active scientific research, most of these are dead weight in your context window. Cherry-pick only what you need.</p>
+      <p><strong>impeccable (21 skills)</strong> — Essential for any frontend work. The anti-pattern enforcement (/audit, /polish, /distill) is unique and prevents generic AI design output. Use this on every UI project.</p>
+      <p><strong>no-use-effect</strong> — Tiny but sharp. If you write React, this should always be loaded. Zero bloat, maximum impact.</p>
+      <div class="highlight">
+        <strong>Verdict:</strong> Always load: impeccable + no-use-effect + marketingskills. Load claude-scientific-skills only on science projects. Load skills (Codex) for Figma/Linear/Notion integrations.
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-methodology">
+      <h4>Process & Methodology Skills</h4>
+      <p><strong>superpowers (v5.0.6)</strong> — The cleanest methodology pack. TDD, systematic debugging, subagent-driven development, git worktrees, code review. Complements OMC perfectly.</p>
+      <p><strong>Agent-Skills-for-Context-Engineering (14 skills)</strong> — Academic-grade context engineering. The context-degradation and context-compression skills are immediately actionable. The multi-agent-patterns and memory-systems skills inform how you architect new agents.</p>
+      <p><strong>create_optimized_agent_workflow.md</strong> — Concise reference for subagent orchestration. Integrates well as a CLAUDE.md reference.</p>
+      <div class="highlight">
+        <strong>Verdict:</strong> superpowers = daily driver for development methodology. Context Engineering = read once, internalize, reference for agent building. Workflow doc = embed in CLAUDE.md.
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-memory">
+      <h4>Memory & Persistence Systems</h4>
+      <p><strong>claude-mem (v10.4.1)</strong> — The most mature memory system. Automatic observation tracking, semantic summarization, JSONL format, Discord/Slack feeds. Hook-based lifecycle (SessionStart → PostToolUse → Stop → SessionEnd).</p>
+      <p><strong>ruflo AgentDB</strong> — Enterprise-grade vector memory with 150-12,500x faster retrieval. More powerful but heavier.</p>
+      <p><strong>Cowork built-in auto-memory</strong> — Already active in this session. Lightweight, file-based, good for user preferences and project context.</p>
+      <div class="highlight">
+        <strong>Verdict:</strong> Use Cowork auto-memory for personal preferences and light context. Use claude-mem for project-level persistent memory across sessions. Reserve ruflo AgentDB for large-scale multi-agent scenarios.
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: Data & Infrastructure -->
+  <section id="data-engineering">
+    <h2>Data & Infrastructure Tools</h2>
+    <p class="subtitle">Your data engineering, vector search, financial analysis, and security scanning stack</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title" style="color: var(--accent2)">RuVector — Self-Learning Vector DB</div>
+        <div class="card-desc">
+          <strong>Why it matters:</strong> Every RAG system, knowledge base, and semantic search you build can use this. The self-learning GNN means queries get better automatically. PostgreSQL drop-in means zero migration cost. Post-quantum crypto is future-proof.
+        </div>
+        <p><strong>Your use cases:</strong> Knowledge spaces, slot connections, content embeddings, search across multiple codebases, connecting GitHub/Google/other content sources.</p>
+        <p><strong>Integration:</strong> Feeds into bruin pipelines, powers agent memory (ruflo AgentDB is built on it), serves as the backbone for cross-project semantic search.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="color: var(--accent2)">Bruin — Unified Data Pipelines</div>
+        <div class="card-desc">
+          <strong>Why it matters:</strong> You mentioned receiving finance files and working with data engineers. Bruin unifies SQL, Python, and R transforms with built-in quality checks. Go-compiled = fast. GitHub Actions = CI/CD for data.
+        </div>
+        <p><strong>Your use cases:</strong> ETL for finance data, data quality validation, connecting multiple data sources, pipeline orchestration across Snowflake/BigQuery/DuckDB.</p>
+        <p><strong>Integration:</strong> Ingests raw data → transforms → quality checks → feeds into RuVector for semantic search or downstream analytics.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="color: var(--accent2)">Strix — Autonomous Security Testing</div>
+        <div class="card-desc">
+          <strong>Why it matters:</strong> Every application you ship should be security-tested. Strix runs AI agents that think like hackers — 25+ vulnerability categories, proof-of-concepts, auto-fix PRs. Integrates into GitHub Actions.
+        </div>
+        <p><strong>Your use cases:</strong> Scan your Blackboard chat app, blogger deployment tool, framework projects, any web-facing service before deploy.</p>
+        <p><strong>Integration:</strong> Runs as post-deploy check via gstack's /canary or as CI/CD step. Feeds findings into project memory for tracking.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="color: var(--accent2)">AI Hedge Fund — Multi-Agent Finance</div>
+        <div class="card-desc">
+          <strong>Why it matters:</strong> The multi-expert consensus pattern (18 agents with competing perspectives) is applicable beyond finance — legal analysis, content strategy, architecture decisions. The LangGraph orchestration is reusable.
+        </div>
+        <p><strong>Your use cases:</strong> Financial analysis workflows, multi-perspective decision making for business strategy, GTM competitive analysis.</p>
+        <p><strong>Integration:</strong> Reference architecture for building your own multi-expert agents. Fork the pattern for marketing strategy or technical decision-making.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: Dev Tools -->
+  <section id="devtools">
+    <h2>Development Tools & Frameworks</h2>
+    <p class="subtitle">Frontend quality, React patterns, research, and workflow references</p>
+
+    <details>
+      <summary>impeccable — Design System Enforcement</summary>
+      <div class="detail-body">
+        <p>21 skills with 20 steering commands. The key insight: AI-generated frontends tend toward generic patterns (overused fonts, gray-on-colored, nested cards). Impeccable explicitly combats this with anti-patterns and design vocabulary.</p>
+        <p><strong>Must-use commands:</strong> /audit (before shipping any UI), /polish (final pass), /distill (simplify complex views), /typeset (typography), /overdrive (when you want maximum visual impact).</p>
+        <p><strong>Recommendation:</strong> Always active for frontend projects. Pair with no-use-effect for React work.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>no-use-effect — React Quality Gate</summary>
+      <div class="detail-body">
+        <p>5 strict rules: derive state via useMemo, use data-fetching libraries (React Query/SWR), prefer event handlers, use useMountEffect, key-based resets. Based on React's official "You Might Not Need an Effect" guidance.</p>
+        <p><strong>Recommendation:</strong> Always active. Zero context cost, maximum code quality impact.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>last30days-skill — Real-Time Research</summary>
+      <div class="detail-body">
+        <p>Aggregates across Reddit, X, YouTube, TikTok, HN, Polymarket, Bluesky, Instagram, Truth Social. Requires SCRAPECREATORS_API_KEY.</p>
+        <p><strong>Your use cases:</strong> Market research before content creation, competitor monitoring, trend detection for GTM strategy, understanding audience sentiment.</p>
+        <p><strong>Recommendation:</strong> Load on-demand for research sessions. Don't keep always-active — the API calls add latency.</p>
+      </div>
+    </details>
+  </section>
+
+  <!-- SECTION: Domain-Specific -->
+  <section id="domain-specific">
+    <h2>Domain-Specific Stacks</h2>
+    <p class="subtitle">Marketing, scientific research, and cross-platform integration tools</p>
+
+    <h3>Marketing & Go-to-Market</h3>
+    <p>Your GTM stack is actually strong across two sources: the dedicated <strong>marketingskills</strong> repo (34 skills) and the already-installed <strong>marketing plugin</strong> in Cowork (8 skills: content-creation, brand-review, campaign-plan, competitive-brief, draft-content, email-sequence, performance-report, seo-audit).</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Capability</th><th>marketingskills (Repo)</th><th>Cowork Marketing Plugin</th><th>Overlap?</th><th>Best Source</th></tr></thead>
+        <tbody>
+          <tr><td>SEO Audit</td><td>seo-audit, ai-seo, site-architecture, programmatic-seo</td><td>seo-audit</td><td>Partial</td><td>Repo (deeper)</td></tr>
+          <tr><td>Content Creation</td><td>copywriting, copy-editing, social-content</td><td>content-creation, draft-content</td><td>Yes</td><td>Plugin (integrated)</td></tr>
+          <tr><td>Email</td><td>cold-email, email-sequence</td><td>email-sequence</td><td>Yes</td><td>Repo (has cold-email)</td></tr>
+          <tr><td>CRO</td><td>page-cro, signup-flow-cro, onboarding-cro, form-cro, popup-cro, paywall-cro</td><td>—</td><td>No</td><td>Repo (unique)</td></tr>
+          <tr><td>Paid Ads</td><td>paid-ads, ad-creative, ab-test-setup</td><td>—</td><td>No</td><td>Repo (unique)</td></tr>
+          <tr><td>Strategy</td><td>launch-strategy, pricing-strategy, marketing-psychology, competitor-alternatives</td><td>campaign-plan, competitive-brief</td><td>Partial</td><td>Both</td></tr>
+          <tr><td>Analytics</td><td>analytics-tracking</td><td>performance-report</td><td>No</td><td>Both (complementary)</td></tr>
+          <tr><td>Brand</td><td>—</td><td>brand-review</td><td>No</td><td>Plugin (unique)</td></tr>
+          <tr><td>RevOps</td><td>revops, sales-enablement, referral-program, churn-prevention, free-tool-strategy</td><td>—</td><td>No</td><td>Repo (unique)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rec-box">
+      <h4>Marketing Stack Recommendation</h4>
+      <p>Use the <strong>Cowork marketing plugin</strong> as your base (it's already integrated). Supplement with the <strong>marketingskills repo</strong> for CRO, paid ads, RevOps, and the deeper SEO skills. Create a unified marketing CLAUDE.md that references both.</p>
+    </div>
+  </section>
+
+  <!-- SECTION: Overlap & Redundancy -->
+  <section id="overlap">
+    <h2>Overlap & Redundancy Map</h2>
+    <p class="subtitle">Where your tools duplicate effort — and which to consolidate</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Capability</th><th>Duplicated In</th><th>Winner</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td>Agent orchestration</td><td>OMC, ruflo, gstack, OpenHands, deer-flow</td><td>OMC + gstack</td><td>Primary: OMC daily, gstack sprints. Reference only: others</td></tr>
+          <tr><td>Code review</td><td>ECC, superpowers, gstack, OMC</td><td>gstack /review</td><td>Use gstack's staff-engineer review. Disable duplicates</td></tr>
+          <tr><td>TDD workflow</td><td>superpowers, ECC, gstack</td><td>superpowers</td><td>superpowers has the cleanest RED-GREEN-REFACTOR cycle</td></tr>
+          <tr><td>Memory/persistence</td><td>claude-mem, ruflo AgentDB, Cowork auto-memory</td><td>Cowork + claude-mem</td><td>Cowork for preferences, claude-mem for project memory</td></tr>
+          <tr><td>Security scanning</td><td>strix, ECC AgentShield, gstack /cso</td><td>strix + gstack /cso</td><td>strix for deep scans, /cso for quick OWASP checks</td></tr>
+          <tr><td>SEO</td><td>marketingskills, Cowork plugin</td><td>Both (complementary)</td><td>Plugin for quick audits, repo skills for deep dives</td></tr>
+          <tr><td>Content creation</td><td>marketingskills, Cowork plugin, ECC article-writing</td><td>Cowork plugin</td><td>Plugin is integrated; disable ECC article-writing</td></tr>
+          <tr><td>Browser automation</td><td>gstack /browse, Playwright MCP, impeccable</td><td>gstack /browse</td><td>Faster than MCP-based solutions</td></tr>
+          <tr><td>Context engineering</td><td>Agent-Skills-CE, ECC agentic-engineering</td><td>Agent-Skills-CE</td><td>Academic-grade; ECC version is derivative</td></tr>
+          <tr><td>Research</td><td>last30days, deer-flow, Cowork WebSearch</td><td>last30days + WebSearch</td><td>last30days for social, WebSearch for general</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SECTION: Quality Scoring -->
+  <section id="scoring">
+    <h2>Quality Scoring Matrix</h2>
+    <p class="subtitle">Every major tool rated across 6 dimensions — use this to prioritize what to keep active</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Tool</th><th>Docs</th><th>Tests</th><th>Maturity</th><th>Token Cost</th><th>Your Fit</th><th>Overall</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>oh-my-claudecode</td><td><span class="score high">9</span></td><td><span class="score high">8</span></td><td><span class="score high">9</span></td><td><span class="score mid">6</span></td><td><span class="score high">10</span></td><td><span class="score high">8.4</span></td></tr>
+          <tr><td>gstack</td><td><span class="score high">9</span></td><td><span class="score high">8</span></td><td><span class="score high">8</span></td><td><span class="score mid">7</span></td><td><span class="score high">10</span></td><td><span class="score high">8.4</span></td></tr>
+          <tr><td>everything-claude-code</td><td><span class="score high">10</span></td><td><span class="score high">10</span></td><td><span class="score high">10</span></td><td><span class="score low">4</span></td><td><span class="score high">8</span></td><td><span class="score high">8.4</span></td></tr>
+          <tr><td>superpowers</td><td><span class="score high">8</span></td><td><span class="score mid">7</span></td><td><span class="score high">8</span></td><td><span class="score high">9</span></td><td><span class="score high">9</span></td><td><span class="score high">8.2</span></td></tr>
+          <tr><td>impeccable</td><td><span class="score high">9</span></td><td><span class="score mid">7</span></td><td><span class="score high">8</span></td><td><span class="score high">8</span></td><td><span class="score high">9</span></td><td><span class="score high">8.2</span></td></tr>
+          <tr><td>marketingskills</td><td><span class="score high">8</span></td><td><span class="score mid">5</span></td><td><span class="score mid">7</span></td><td><span class="score high">8</span></td><td><span class="score high">10</span></td><td><span class="score mid">7.6</span></td></tr>
+          <tr><td>claude-mem</td><td><span class="score high">8</span></td><td><span class="score mid">7</span></td><td><span class="score high">9</span></td><td><span class="score mid">6</span></td><td><span class="score high">8</span></td><td><span class="score mid">7.6</span></td></tr>
+          <tr><td>Agent-Skills-CE</td><td><span class="score high">10</span></td><td><span class="score mid">6</span></td><td><span class="score high">8</span></td><td><span class="score high">9</span></td><td><span class="score mid">7</span></td><td><span class="score high">8.0</span></td></tr>
+          <tr><td>RuVector</td><td><span class="score high">9</span></td><td><span class="score high">8</span></td><td><span class="score mid">7</span></td><td><span class="score mid">5</span></td><td><span class="score high">8</span></td><td><span class="score mid">7.4</span></td></tr>
+          <tr><td>ruflo</td><td><span class="score high">8</span></td><td><span class="score mid">7</span></td><td><span class="score high">8</span></td><td><span class="score low">3</span></td><td><span class="score mid">6</span></td><td><span class="score mid">6.4</span></td></tr>
+          <tr><td>no-use-effect</td><td><span class="score mid">6</span></td><td><span class="score low">3</span></td><td><span class="score mid">5</span></td><td><span class="score high">10</span></td><td><span class="score high">8</span></td><td><span class="score mid">6.4</span></td></tr>
+          <tr><td>last30days</td><td><span class="score mid">7</span></td><td><span class="score mid">5</span></td><td><span class="score mid">7</span></td><td><span class="score mid">5</span></td><td><span class="score high">8</span></td><td><span class="score mid">6.4</span></td></tr>
+          <tr><td>claude-scientific-skills</td><td><span class="score high">9</span></td><td><span class="score mid">6</span></td><td><span class="score mid">7</span></td><td><span class="score low">2</span></td><td><span class="score low">4</span></td><td><span class="score mid">5.6</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="color: var(--text-muted); font-size: 12px;">Scores: 1-10. Token Cost inverted (10 = minimal cost, 1 = heavy). Your Fit = relevance to Luis's specific workflow domains.</p>
+  </section>
+
+  <!-- SECTION: Gap Analysis -->
+  <section id="gap-analysis">
+    <h2>Gap Analysis</h2>
+    <p class="subtitle">What's missing from your current stack — capabilities you need but don't have</p>
+
+    <div class="card-grid">
+      <div class="card" style="border-color: var(--red);">
+        <div class="card-title" style="color: var(--red);">Kubernetes / DevOps Skills</div>
+        <div class="card-desc">You mentioned K8s, device management, and multiple cell connections. No dedicated K8s skill exists in your stack. Bruin handles data pipelines but not infrastructure orchestration.</div>
+        <p><strong>Need:</strong> A skill for kubectl operations, Helm charts, pod debugging, deployment strategies, service mesh configuration.</p>
+      </div>
+
+      <div class="card" style="border-color: var(--red);">
+        <div class="card-title" style="color: var(--red);">Multi-Language Codebase Skill</div>
+        <div class="card-desc">You work in Go, Python, TypeScript, Rust, and more. No skill exists for cross-language refactoring, polyglot architecture decisions, or language migration patterns.</div>
+        <p><strong>Need:</strong> A skill that understands your language preferences per domain and applies the right patterns.</p>
+      </div>
+
+      <div class="card" style="border-color: var(--red);">
+        <div class="card-title" style="color: var(--red);">Personal Brand / Content Distribution</div>
+        <div class="card-desc">You have content creation skills but no systematic content distribution, cross-posting, or personal brand management skill.</div>
+        <p><strong>Need:</strong> A skill for content repurposing (blog → LinkedIn → X → YouTube script), distribution scheduling, and audience analytics.</p>
+      </div>
+
+      <div class="card" style="border-color: var(--red);">
+        <div class="card-title" style="color: var(--red);">Cross-Project Knowledge Sync</div>
+        <div class="card-desc">You have 24+ projects but no way to maintain shared knowledge across them. Each project has its own CLAUDE.md but they don't reference each other.</div>
+        <p><strong>Need:</strong> A master context system that knows about ALL your projects and can cross-reference patterns, decisions, and lessons.</p>
+      </div>
+
+      <div class="card" style="border-color: var(--yellow);">
+        <div class="card-title" style="color: var(--yellow);">Finance / Accounting Workflow</div>
+        <div class="card-desc">You mentioned receiving finance files. The ai-hedge-fund is educational, not operational. No skill for invoice processing, financial reporting, or accounting automation.</div>
+        <p><strong>Need:</strong> Skills for financial document processing, reporting templates, budget tracking.</p>
+      </div>
+
+      <div class="card" style="border-color: var(--yellow);">
+        <div class="card-title" style="color: var(--yellow);">Video / Multimedia Pipeline</div>
+        <div class="card-desc">You mentioned video projects and Blackboard. No skill for video editing scripts, thumbnail generation, transcription workflows, or multimedia asset management.</div>
+        <p><strong>Need:</strong> A multimedia workflow skill that handles video project scaffolding and content pipeline.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: Skills to Keep -->
+  <section id="keep">
+    <h2>Skills to Keep & Always Load</h2>
+    <p class="subtitle">Your essential, always-active skill stack — the non-negotiables</p>
+
+    <div class="highlight">
+      <strong>Tier 1 — Always Active (every session):</strong>
+      <ul>
+        <li><strong>oh-my-claudecode</strong> — Agent orchestration backbone</li>
+        <li><strong>superpowers</strong> — TDD, debugging, development methodology</li>
+        <li><strong>impeccable</strong> — Frontend design quality enforcement</li>
+        <li><strong>no-use-effect</strong> — React code quality (zero token cost)</li>
+        <li><strong>Cowork auto-memory</strong> — Personal preferences and project context</li>
+      </ul>
+    </div>
+
+    <div class="highlight" style="border-color: var(--accent2);">
+      <strong>Tier 2 — Load Per Domain:</strong>
+      <ul>
+        <li><strong>gstack</strong> — When running structured sprints (/review, /qa, /ship)</li>
+        <li><strong>marketingskills + Cowork marketing plugin</strong> — When doing GTM work</li>
+        <li><strong>last30days-skill</strong> — When doing market research</li>
+        <li><strong>claude-mem</strong> — When working on long-running projects needing memory</li>
+        <li><strong>Agent-Skills-CE</strong> — When building new agents or skills</li>
+      </ul>
+    </div>
+
+    <div class="highlight" style="border-color: var(--yellow);">
+      <strong>Tier 3 — On-Demand Only:</strong>
+      <ul>
+        <li><strong>everything-claude-code</strong> — Cherry-pick specific skills, don't load the whole pack</li>
+        <li><strong>ruflo</strong> — Enterprise swarm scenarios only</li>
+        <li><strong>claude-scientific-skills</strong> — Scientific research projects only</li>
+        <li><strong>strix</strong> — Pre-deployment security scans</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION: Skills to Drop -->
+  <section id="drop">
+    <h2>Skills to Drop or Merge</h2>
+    <p class="subtitle">Reduce context bloat by eliminating redundancy</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tool</th><th>Action</th><th>Reason</th></tr></thead>
+        <tbody>
+          <tr><td>awesome-claude-code</td><td><span class="tag tag-warn">Reference Only</span></td><td>Discovery index, not a runtime tool. Bookmark, don't install.</td></tr>
+          <tr><td>awesome-claude-skills</td><td><span class="tag tag-warn">Reference Only</span></td><td>Same — use for discovery. The Composio integration is useful but load separately.</td></tr>
+          <tr><td>OpenHands</td><td><span class="tag tag-warn">Reference Only</span></td><td>Standalone platform, not a Claude Code plugin. Study the SDK patterns.</td></tr>
+          <tr><td>deer-flow</td><td><span class="tag tag-warn">Reference Only</span></td><td>ByteDance's harness — impressive but not Claude Code-native. Keep as architecture reference.</td></tr>
+          <tr><td>ECC article-writing</td><td><span class="tag tag-warn">Merge</span></td><td>Overlaps with Cowork content-creation plugin. Use the plugin instead.</td></tr>
+          <tr><td>ECC code-review skill</td><td><span class="tag tag-warn">Merge</span></td><td>gstack /review is more thorough (staff-engineer level). Use that instead.</td></tr>
+          <tr><td>Multiple TDD skills</td><td><span class="tag tag-warn">Consolidate</span></td><td>superpowers TDD is the cleanest. Disable ECC and gstack TDD duplicates.</td></tr>
+          <tr><td>skills (Codex repo)</td><td><span class="tag tag-info">Cherry-pick</span></td><td>Extract Figma, Linear, Notion skills only. Don't install the full Codex pack.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SECTION: Skills to Create -->
+  <section id="create">
+    <h2>Custom Skills to Create</h2>
+    <p class="subtitle">New skills tailored to Luis's specific workflow gaps</p>
+
+    <div class="card-grid">
+      <div class="card" style="border-color: var(--green);">
+        <div class="card-title" style="color: var(--green);">delavalom-k8s</div>
+        <div class="card-desc">Kubernetes operations skill — kubectl wrappers, pod debugging, deployment strategies, Helm chart generation, service mesh configuration, log aggregation patterns.</div>
+        <div class="card-meta"><span class="tag tag-type">Priority: High</span><span class="tag tag-lang">Go + YAML</span></div>
+      </div>
+
+      <div class="card" style="border-color: var(--green);">
+        <div class="card-title" style="color: var(--green);">delavalom-distribute</div>
+        <div class="card-desc">Content distribution pipeline — takes a single piece of content and generates platform-specific versions (blog, LinkedIn, X thread, YouTube script, newsletter), with scheduling recommendations.</div>
+        <div class="card-meta"><span class="tag tag-type">Priority: High</span><span class="tag tag-lang">Markdown</span></div>
+      </div>
+
+      <div class="card" style="border-color: var(--green);">
+        <div class="card-title" style="color: var(--green);">delavalom-polyglot</div>
+        <div class="card-desc">Multi-language codebase skill — knows when to use Go (infrastructure), Python (data/ML), TypeScript (web), Rust (performance). Cross-language refactoring patterns.</div>
+        <div class="card-meta"><span class="tag tag-type">Priority: Medium</span><span class="tag tag-lang">Multi</span></div>
+      </div>
+
+      <div class="card" style="border-color: var(--green);">
+        <div class="card-title" style="color: var(--green);">delavalom-cross-project</div>
+        <div class="card-desc">Cross-project knowledge sync — maintains a registry of all projects, their status, shared patterns, and cross-references. Prevents knowledge silos.</div>
+        <div class="card-meta"><span class="tag tag-type">Priority: Medium</span><span class="tag tag-lang">Markdown + JSON</span></div>
+      </div>
+
+      <div class="card" style="border-color: var(--accent4);">
+        <div class="card-title" style="color: var(--accent4);">delavalom-finance</div>
+        <div class="card-desc">Finance workflow skill — invoice processing, financial reporting templates, budget tracking, file categorization for incoming finance documents.</div>
+        <div class="card-meta"><span class="tag tag-type">Priority: Medium</span><span class="tag tag-lang">Python</span></div>
+      </div>
+
+      <div class="card" style="border-color: var(--accent4);">
+        <div class="card-title" style="color: var(--accent4);">delavalom-video</div>
+        <div class="card-desc">Multimedia pipeline — video project scaffolding, transcription workflows, thumbnail generation prompts, content repurposing from video to text.</div>
+        <div class="card-meta"><span class="tag tag-type">Priority: Low</span><span class="tag tag-lang">Python + Bash</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: Optimal Workflow Design -->
+  <section id="workflow">
+    <h2>Optimal Workflow Design</h2>
+    <p class="subtitle">The definitive Claude Code workflow for the Delavalom stack — from idea to production</p>
+
+    <h3>The Delavalom Pipeline</h3>
+    <div class="flow-diagram">
+      <div class="flow-step active"><div class="step-name">THINK</div><div class="step-tool">OMC + superpowers brainstorming</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="step-name">RESEARCH</div><div class="step-tool">last30days + WebSearch</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="step-name">PLAN</div><div class="step-tool">gstack /plan-ceo-review</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="step-name">BUILD</div><div class="step-tool">OMC agents + superpowers TDD</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="step-name">REVIEW</div><div class="step-tool">gstack /review + impeccable /audit</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="step-name">SECURE</div><div class="step-tool">strix + gstack /cso</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="step-name">SHIP</div><div class="step-tool">gstack /ship + /canary</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><div class="step-name">REFLECT</div><div class="step-tool">gstack /retro + memory save</div></div>
+    </div>
+
+    <h3>Workflow by Domain</h3>
+
+    <details>
+      <summary>Engineering Workflow (Code, K8s, Infrastructure)</summary>
+      <div class="detail-body">
+        <p><strong>Active skills:</strong> OMC + superpowers + impeccable + no-use-effect + gstack</p>
+        <p><strong>Flow:</strong></p>
+        <ul>
+          <li>Start: OMC orchestrates task delegation to specialized agents (architect, debugger, executor)</li>
+          <li>Development: superpowers TDD (RED-GREEN-REFACTOR), systematic debugging for bugs</li>
+          <li>Frontend: impeccable /audit + no-use-effect enforcement on every React component</li>
+          <li>Review: gstack /review (staff-engineer level), then /qa (Playwright browser testing)</li>
+          <li>Security: gstack /cso (OWASP + STRIDE quick check), strix for deep scans pre-deploy</li>
+          <li>Deploy: gstack /ship (release engineering), /canary (post-deploy monitoring)</li>
+          <li>Improve: gstack /retro weekly across all projects</li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>Data Engineering Workflow (Pipelines, ML, Analytics)</summary>
+      <div class="detail-body">
+        <p><strong>Active skills:</strong> OMC + bruin knowledge + RuVector patterns + Agent-Skills-CE</p>
+        <p><strong>Flow:</strong></p>
+        <ul>
+          <li>Ingest: bruin pipelines for ETL (SQL/Python/R), data quality checks built-in</li>
+          <li>Store: RuVector for semantic search, embeddings, knowledge graphs</li>
+          <li>Process: Python agents for ML, data transformation, feature engineering</li>
+          <li>Serve: API endpoints, dashboards, reporting</li>
+          <li>Monitor: Data quality alerts, pipeline health checks</li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>Marketing & GTM Workflow (Content, SEO, Distribution)</summary>
+      <div class="detail-body">
+        <p><strong>Active skills:</strong> Cowork marketing plugin + marketingskills + last30days + impeccable (for landing pages)</p>
+        <p><strong>Flow:</strong></p>
+        <ul>
+          <li>Research: last30days for trends, Cowork competitive-brief for positioning</li>
+          <li>Strategy: Cowork campaign-plan + marketingskills launch-strategy + pricing-strategy</li>
+          <li>Create: Cowork content-creation / draft-content for writing, marketingskills copywriting for optimization</li>
+          <li>Optimize: marketingskills seo-audit + ai-seo + page-cro for conversion</li>
+          <li>Distribute: [NEW delavalom-distribute skill] for cross-platform repurposing</li>
+          <li>Measure: Cowork performance-report + marketingskills analytics-tracking</li>
+          <li>Iterate: Cowork brand-review for consistency checks</li>
+        </ul>
+      </div>
+    </details>
+
+    <details>
+      <summary>Finance Workflow (Documents, Reporting, Analysis)</summary>
+      <div class="detail-body">
+        <p><strong>Active skills:</strong> Cowork document skills (pdf, xlsx, docx) + [NEW delavalom-finance skill]</p>
+        <p><strong>Flow:</strong></p>
+        <ul>
+          <li>Receive: Categorize incoming finance files by type (invoices, reports, statements)</li>
+          <li>Extract: PDF skill for document extraction, XLSX skill for spreadsheet processing</li>
+          <li>Analyze: ai-hedge-fund patterns for multi-perspective financial analysis</li>
+          <li>Report: DOCX/PDF skills for formatted output, XLSX for financial models</li>
+        </ul>
+      </div>
+    </details>
+  </section>
+
+  <!-- SECTION: Architecture Blueprint -->
+  <section id="architecture">
+    <h2>Architecture Blueprint</h2>
+    <p class="subtitle">How all the pieces connect — the full system design for the Delavalom workflow</p>
+
+    <h3>System Layers</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Layer</th><th>Tool</th><th>Purpose</th><th>Always Active?</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Identity</strong></td><td>Master CLAUDE.md</td><td>Luis's style, rules, preferences, cross-project context</td><td>Yes</td></tr>
+          <tr><td><strong>Orchestration</strong></td><td>oh-my-claudecode</td><td>Agent routing, task delegation, token optimization</td><td>Yes</td></tr>
+          <tr><td><strong>Methodology</strong></td><td>superpowers</td><td>TDD, debugging, review, collaboration patterns</td><td>Yes</td></tr>
+          <tr><td><strong>Quality</strong></td><td>impeccable + no-use-effect</td><td>Design enforcement, React anti-patterns</td><td>Yes</td></tr>
+          <tr><td><strong>Sprint</strong></td><td>gstack</td><td>Plan → Build → Review → Test → Ship → Reflect</td><td>Per-sprint</td></tr>
+          <tr><td><strong>Marketing</strong></td><td>Cowork plugin + marketingskills</td><td>Content, SEO, CRO, email, strategy</td><td>Per-domain</td></tr>
+          <tr><td><strong>Research</strong></td><td>last30days + WebSearch</td><td>Real-time market intelligence</td><td>On-demand</td></tr>
+          <tr><td><strong>Memory</strong></td><td>Cowork auto-memory + claude-mem</td><td>Preferences (short-term) + project memory (long-term)</td><td>Yes</td></tr>
+          <tr><td><strong>Data</strong></td><td>bruin + RuVector</td><td>Pipelines, semantic search, knowledge graphs</td><td>Per-domain</td></tr>
+          <tr><td><strong>Security</strong></td><td>strix + gstack /cso</td><td>Autonomous pentesting, OWASP/STRIDE checks</td><td>Pre-deploy</td></tr>
+          <tr><td><strong>Enterprise</strong></td><td>ruflo</td><td>Swarm intelligence, distributed consensus</td><td>When needed</td></tr>
+          <tr><td><strong>Context</strong></td><td>Agent-Skills-CE</td><td>Agent architecture, context optimization</td><td>Agent-building</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>MCP Server Configuration (Recommended)</h3>
+    <p>Of the 24 MCP servers found across your repos, here's the curated set to actually configure:</p>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title" style="color: var(--green);">Essential (Always On)</div>
+        <ul>
+          <li><strong>github</strong> — PR/issue operations</li>
+          <li><strong>filesystem</strong> — File operations</li>
+          <li><strong>memory</strong> — Persistent memory</li>
+          <li><strong>sequential-thinking</strong> — Chain-of-thought</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-title" style="color: var(--accent4);">Development</div>
+        <ul>
+          <li><strong>playwright</strong> — Browser automation/testing</li>
+          <li><strong>vercel</strong> — Deployments</li>
+          <li><strong>supabase</strong> — Database operations</li>
+          <li><strong>context7</strong> — Live documentation</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-title" style="color: var(--accent5);">Research & Content</div>
+        <ul>
+          <li><strong>exa-web-search</strong> — Deep web search</li>
+          <li><strong>firecrawl</strong> — Web scraping</li>
+          <li><strong>fal-ai</strong> — Image/video generation</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-title" style="color: var(--text-muted);">On-Demand</div>
+        <ul>
+          <li><strong>cloudflare-*</strong> — When deploying to CF</li>
+          <li><strong>clickhouse</strong> — Analytics queries</li>
+          <li><strong>confluence</strong> — Documentation sync</li>
+          <li><strong>insaits</strong> — AI security monitoring</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Hook Configuration (Recommended)</h3>
+    <div class="highlight">
+      <p><strong>PreToolUse (Bash):</strong> Block --no-verify flag, auto-start dev servers in tmux, git push review reminder</p>
+      <p><strong>SessionStart:</strong> Load project memory from claude-mem, initialize HUD statusline</p>
+      <p><strong>PostToolUse:</strong> Track observations for memory system, token usage monitoring</p>
+      <p><strong>Stop:</strong> Generate session summary, save learnings to memory</p>
+      <p><strong>PreToolUse (Write):</strong> Warn on documentation file modifications, enforce style guide</p>
+    </div>
+
+    <h3>Final Architecture Summary</h3>
+    <div class="rec-box">
+      <h4>The Delavalom Stack — Optimized Configuration</h4>
+      <p>Your 24 repositories distill down to a <strong>12-layer system</strong> with clear separation of concerns. The key insight is that ~60% of your current tools overlap — by consolidating to the winners in each category, you get <strong>better results with less context bloat</strong>.</p>
+      <p><strong>Token budget:</strong> The always-active stack (OMC + superpowers + impeccable + no-use-effect + master CLAUDE.md) consumes roughly 15-20K tokens of context. Adding domain-specific skills per session keeps you under 30K tokens — well within the optimal range for Claude's attention window.</p>
+      <p><strong>Next steps:</strong> The full workflow system (CLAUDE.md + skills + hooks + MCP configs + memory) will be built as the companion deliverables to this report.</p>
+    </div>
+  </section>
+
+</div>
+
+  <!-- SECTION: Sub-Agents -->
+  <section id="subagents">
+    <h2>Layer 12: Custom Sub-Agents</h2>
+    <p class="subtitle">7 specialized Claude Code sub-agents that run in their own context windows with focused tools, models, and persistent memory</p>
+
+    <div class="highlight">
+      <strong>What are sub-agents?</strong> Native Claude Code feature — specialized AI assistants running in their own context windows with custom system prompts, specific tool access, and independent permissions. Claude automatically delegates to them based on task matching. They preserve your main conversation context by keeping exploration and implementation isolated.
+    </div>
+
+    <div class="card-grid">
+      <div class="card" style="border-color: var(--green);">
+        <div class="card-title" style="color: var(--green);">delavalom-reviewer</div>
+        <div class="card-desc">Staff-level code review. Runs git diff, analyzes changes by language, checks security/performance/DRY. Returns prioritized findings: Critical → Warnings → Suggestions.</div>
+        <div class="card-meta"><span class="tag tag-lang">Model: Sonnet</span><span class="tag tag-type">Tools: Read, Grep, Glob, Bash</span><span class="tag tag-info">Memory: user</span></div>
+      </div>
+
+      <div class="card" style="border-color: var(--green);">
+        <div class="card-title" style="color: var(--green);">delavalom-debugger</div>
+        <div class="card-desc">Root-cause analysis specialist. Captures errors, forms hypotheses, implements minimal fixes, verifies solutions. Learns project-specific failure patterns.</div>
+        <div class="card-meta"><span class="tag tag-lang">Model: inherit</span><span class="tag tag-type">Tools: Read, Edit, Bash, Grep, Glob</span><span class="tag tag-info">Memory: project</span></div>
+      </div>
+
+      <div class="card" style="border-color: var(--accent4);">
+        <div class="card-title" style="color: var(--accent4);">delavalom-researcher</div>
+        <div class="card-desc">Fast, cost-optimized research agent. Haiku model for quick codebase/doc exploration. Returns concise summaries with file paths and line numbers.</div>
+        <div class="card-meta"><span class="tag tag-lang">Model: Haiku</span><span class="tag tag-type">Tools: Read, Grep, Glob</span><span class="tag tag-star">Background</span></div>
+      </div>
+
+      <div class="card" style="border-color: var(--accent5);">
+        <div class="card-title" style="color: var(--accent5);">delavalom-k8s-ops</div>
+        <div class="card-desc">Kubernetes operations — pod debugging playbook, Helm chart review, deployment strategies, multi-cell cluster management. Loads the delavalom-k8s skill.</div>
+        <div class="card-meta"><span class="tag tag-lang">Model: Sonnet</span><span class="tag tag-type">Tools: Bash, Read, Grep, Glob</span><span class="tag tag-info">Skill: k8s</span></div>
+      </div>
+
+      <div class="card" style="border-color: var(--accent5);">
+        <div class="card-title" style="color: var(--accent5);">delavalom-data-eng</div>
+        <div class="card-desc">Data pipeline specialist — bruin pipelines, SQL/Python transforms, data quality checks, RuVector integration. Project-level memory for data patterns.</div>
+        <div class="card-meta"><span class="tag tag-lang">Model: inherit</span><span class="tag tag-type">Tools: Bash, Read, Write, Edit, Grep, Glob</span><span class="tag tag-info">Memory: project</span></div>
+      </div>
+
+      <div class="card" style="border-color: var(--accent);">
+        <div class="card-title" style="color: var(--accent);">delavalom-frontend</div>
+        <div class="card-desc">Frontend specialist with impeccable design and no-use-effect skills preloaded. Writes TypeScript + React with anti-generic-AI patterns enforced.</div>
+        <div class="card-meta"><span class="tag tag-lang">Model: Sonnet</span><span class="tag tag-type">Full tools</span><span class="tag tag-info">Skills: impeccable, no-use-effect</span></div>
+      </div>
+
+      <div class="card" style="border-color: var(--accent);">
+        <div class="card-title" style="color: var(--accent);">delavalom-content</div>
+        <div class="card-desc">Content creation + distribution. Generates platform-specific versions (blog, LinkedIn, X, YouTube, newsletter) following the distribution matrix.</div>
+        <div class="card-meta"><span class="tag tag-lang">Model: Sonnet</span><span class="tag tag-type">Tools: Read, Write</span><span class="tag tag-info">Skill: distribute</span></div>
+      </div>
+    </div>
+
+    <div class="rec-box">
+      <h4>Sub-Agent Scoping Strategy</h4>
+      <p><strong>User-level (~/.claude/agents/):</strong> delavalom-reviewer, delavalom-debugger, delavalom-researcher — these work across ALL your projects.</p>
+      <p><strong>Project-level (.claude/agents/):</strong> delavalom-k8s-ops, delavalom-data-eng, delavalom-frontend, delavalom-content — specific to the Delavalom stack context.</p>
+      <p><strong>Key insight:</strong> Sub-agents load only their description into the main context (saving tokens). The full system prompt loads only when Claude delegates to them.</p>
+    </div>
+  </section>
+
+  <!-- SECTION: Agent Teams -->
+  <section id="agentteams">
+    <h2>Layer 13: Agent Teams (Experimental)</h2>
+    <p class="subtitle">Multi-instance coordination for tasks requiring parallel work with inter-agent communication</p>
+
+    <div class="highlight" style="border-color: var(--yellow);">
+      <strong>Experimental Feature:</strong> Agent teams require <span class="code">CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1</span> in settings.json (already configured by the installer). Requires Claude Code v2.1.32+.
+    </div>
+
+    <h3>When to Use Agent Teams vs Sub-Agents</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Dimension</th><th>Sub-Agents (Layer 12)</th><th>Agent Teams (Layer 13)</th></tr></thead>
+        <tbody>
+          <tr><td>Context</td><td>Own window, results return to caller</td><td>Own window, fully independent</td></tr>
+          <tr><td>Communication</td><td>Report back to main agent only</td><td>Teammates message each other directly</td></tr>
+          <tr><td>Coordination</td><td>Main agent manages all work</td><td>Shared task list, self-coordination</td></tr>
+          <tr><td>Token cost</td><td>Lower (results summarized)</td><td>Higher (each is separate instance)</td></tr>
+          <tr><td>Best for</td><td>Focused tasks where only result matters</td><td>Complex work requiring discussion</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Decision Tree</h3>
+    <div class="flow-diagram">
+      <div class="flow-step"><div class="step-name">Single task?</div><div class="step-tool">→ Sub-agent</div></div>
+      <div class="flow-arrow">|</div>
+      <div class="flow-step"><div class="step-name">Multiple independent?</div><div class="step-tool">→ Parallel sub-agents</div></div>
+      <div class="flow-arrow">|</div>
+      <div class="flow-step"><div class="step-name">Need communication?</div><div class="step-tool">→ Agent team</div></div>
+      <div class="flow-arrow">|</div>
+      <div class="flow-step"><div class="step-name">Sequential?</div><div class="step-tool">→ Main conversation</div></div>
+    </div>
+
+    <h3>Delavalom Agent Team Patterns</h3>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">Parallel Code Review</div>
+        <div class="card-desc">3 teammates review the same PR from security, performance, and test coverage perspectives simultaneously. Lead synthesizes findings.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Competing Hypothesis Debug</div>
+        <div class="card-desc">5 teammates investigate different root causes in parallel, actively debating each other's theories. Surviving theory is the actual cause.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Cross-Layer Feature Build</div>
+        <div class="card-desc">Frontend (TypeScript), backend (Go/Python), and test teammates each own their domain. Shared task list coordinates interfaces.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Research Sprint</div>
+        <div class="card-desc">Teammates research different market segments, competitors, or technology options simultaneously. Lead produces unified brief.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: Installer -->
+  <section id="installer">
+    <h2>One-Click Installation</h2>
+    <p class="subtitle">Install the entire Delavalom Stack with a single command</p>
+
+    <div class="card-grid">
+      <div class="card" style="border-color: var(--green);">
+        <div class="card-title" style="color: var(--green);">Full Install</div>
+        <div class="card-desc"><span class="code">bash install.sh --full</span><br>Agents + skills + hooks + MCP + memory + agent teams. Everything you need.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Minimal Install</div>
+        <div class="card-desc"><span class="code">bash install.sh --minimal</span><br>Just agents + CLAUDE.md. Fastest setup, add layers incrementally.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Agents Only</div>
+        <div class="card-desc"><span class="code">bash install.sh --agents</span><br>Only the 7 custom sub-agents. Use when you already have skills/hooks configured.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Plugin Marketplace</div>
+        <div class="card-desc"><span class="code">claude plugins install delavalom-stack</span><br>Install from the Claude Code plugin marketplace (when published).</div>
+      </div>
+    </div>
+
+    <h3>What Gets Installed</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Component</th><th>Count</th><th>Location</th></tr></thead>
+        <tbody>
+          <tr><td>User-level sub-agents</td><td>3</td><td>~/.claude/agents/</td></tr>
+          <tr><td>Project-level sub-agents</td><td>4</td><td>.claude/agents/</td></tr>
+          <tr><td>Custom domain skills</td><td>4</td><td>.claude/skills/delavalom-*/</td></tr>
+          <tr><td>Hook configurations</td><td>3</td><td>.claude/hooks/hooks.json</td></tr>
+          <tr><td>MCP server configs</td><td>7</td><td>.claude/mcp.json</td></tr>
+          <tr><td>Settings (agent teams)</td><td>1</td><td>.claude/settings.json</td></tr>
+          <tr><td>Master context</td><td>1</td><td>.claude/CLAUDE.md</td></tr>
+          <tr><td>Plugin manifest</td><td>1</td><td>.claude-plugin/plugin.json</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  // Card filtering
+  function filterCards(cat, btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('#card-grid .card').forEach(card => {
+      if (cat === 'all' || card.dataset.cat === cat) {
+        card.style.display = '';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  }
+
+  // Tab switching
+  function openTab(e, tabId) {
+    const parent = e.target.closest('section') || document;
+    parent.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    parent.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    e.target.classList.add('active');
+    document.getElementById(tabId).classList.add('active');
+  }
+
+  // Active nav highlighting on scroll
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('.nav-link');
+  window.addEventListener('scroll', () => {
+    let current = '';
+    sections.forEach(s => {
+      if (window.scrollY >= s.offsetTop - 100) current = s.id;
+    });
+    navLinks.forEach(l => {
+      l.classList.remove('active');
+      if (l.getAttribute('href') === '#' + current) l.classList.add('active');
+    });
+  });
+</script>
+
+</body>
+</html>
