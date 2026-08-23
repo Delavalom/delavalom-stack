@@ -1,7 +1,4 @@
 {
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-  },
   "permissions": {
     "allow": [
       "Read",
@@ -10,13 +7,6 @@
       "Bash",
       "Edit",
       "Write",
-      "Agent(delavalom-reviewer)",
-      "Agent(delavalom-debugger)",
-      "Agent(delavalom-researcher)",
-      "Agent(delavalom-k8s-ops)",
-      "Agent(delavalom-data-eng)",
-      "Agent(delavalom-frontend)",
-      "Agent(delavalom-content)",
       "Agent(Explore)",
       "Agent(Plan)"
     ]

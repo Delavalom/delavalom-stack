@@ -47,10 +47,8 @@ fi
 
 # Claude Code shortcuts
 alias cc="claude"
-alias ccr="claude --agent delavalom-reviewer"
-alias ccd="claude --agent delavalom-debugger"
-alias ccf="claude --agent delavalom-frontend"
-alias cck="claude --agent delavalom-k8s-ops"
+alias ccc="claude --continue"
+alias ccp="claude --permission-mode plan"
 
 # Git shortcuts
 alias gs="git status"

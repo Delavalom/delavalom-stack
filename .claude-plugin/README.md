@@ -1,45 +1,39 @@
 # Delavalom Stack Plugin
 
-Shared Claude Code development workspace for multi-domain engineering.
+A portable Claude Code skill set: 16 vendored skills for architecture, code archaeology, engineering principles, verification, writing, and infrastructure.
 
 ## What's Included
 
-- **7 Sub-Agents**: reviewer, debugger, researcher, k8s-ops, data-eng, frontend, content
-- **4 Domain Skills**: k8s operations, content distribution, polyglot codebase, cross-project knowledge
-- **3 Hooks**: --no-verify blocking, pre-push review reminder, doc modification warning
-- **7 MCP Servers**: github, filesystem, memory, sequential-thinking, playwright, context7, exa-web-search
-- **Agent Teams**: experimental multi-agent coordination enabled
+- **Design & architecture**: `architect`, `how`, `why`, `blast-radius`
+- **Engineering principles**: `principle-model-the-domain`, `principle-boundary-discipline`, `principle-make-operations-idempotent`, `principle-prove-it-works`
+- **Verification & process**: `create-verification-skill`, `show-me-your-work`
+- **Writing**: `technical-writing`, `unslop`, `bro`
+- **Frontend & infrastructure**: `no-use-effect`, `clone-webapp`, `use-railway`
+
+Plus a mise/starship/zsh shell setup.
 
 ## Installation
 
-### Full Install (recommended)
+### Full install (recommended)
 ```bash
 git clone https://github.com/delavalom/delavalom-stack.git
 cd delavalom-stack
 bash install.sh --full
 ```
 
-This auto-installs 7 external plugins (superpowers, gstack, impeccable, oh-my-claudecode, marketingskills, no-use-effect, everything-claude-code).
+### Skills only
+```bash
+bash install.sh --skills
+```
 
-### Add to Another Project
+### Add to another project
 ```bash
 bash install.sh --project /path/to/your-project
 ```
 
-### Agents Only
-```bash
-bash install.sh --agents
-```
-
-### Dry Run (preview)
+### Dry run (preview)
 ```bash
 bash install.sh --full --dry-run
-```
-
-## The Delavalom Pipeline
-
-```
-THINK -> RESEARCH -> PLAN -> BUILD -> REVIEW -> SECURE -> SHIP -> REFLECT
 ```
 
 ## Uninstall
@@ -47,3 +41,5 @@ THINK -> RESEARCH -> PLAN -> BUILD -> REVIEW -> SECURE -> SHIP -> REFLECT
 ```bash
 bash install.sh --uninstall
 ```
+
+See the [repo README](../README.md) for the full skill table and details.

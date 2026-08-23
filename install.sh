@@ -2,15 +2,17 @@
 set -euo pipefail
 
 # ============================================================
-# Delavalom Stack Installer v2.0.0
-# Production-ready setup for the complete Claude Code workflow
+# Delavalom Stack Installer v3.0.0
+# Installs the vendored skill set + shell configuration
 # ============================================================
 
-VERSION="2.0.0"
+VERSION="3.0.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_HOME="${HOME}/.claude"
-PROJECT_CLAUDE="${SCRIPT_DIR}/.claude"
-SKILLS_DIR="${CLAUDE_HOME}/skills"
+STACK_CLAUDE="${SCRIPT_DIR}/.claude"
+STACK_SKILLS="${STACK_CLAUDE}/skills"
+USER_SKILLS="${CLAUDE_HOME}/skills"
+BACKUP_ROOT="${CLAUDE_HOME}/backups"
 
 # Colors
 RED='\033[0;31m'
@@ -23,13 +25,7 @@ NC='\033[0m'
 BOLD='\033[1m'
 DIM='\033[2m'
 
-# Counters
-INSTALLED_AGENTS=0
 INSTALLED_SKILLS=0
-INSTALLED_HOOKS=0
-INSTALLED_PLUGINS=0
-FAILED_PLUGINS=0
-PLUGIN_FAILURES=()
 
 # ============================================================
 # Helpers
@@ -39,7 +35,7 @@ print_banner() {
     echo -e "${PURPLE}"
     echo "  +===================================================+"
     echo "  |         DELAVALOM STACK INSTALLER                  |"
-    echo "  |         v${VERSION} -- Production-Ready Setup           |"
+    echo "  |         v${VERSION} -- Skills + Shell                   |"
     echo "  +===================================================+"
     echo -e "${NC}"
 }
@@ -53,88 +49,41 @@ log_dry()  { echo -e "${DIM}[DRY]${NC}  $1"; }
 
 die() { log_err "$1"; exit 1; }
 
-# DRY_RUN-aware wrappers
-run_cmd() {
-    if $DRY_RUN; then
-        log_dry "$*"
-    else
-        "$@"
-    fi
-}
-
 run_mkdir() {
-    if $DRY_RUN; then
-        log_dry "mkdir -p $1"
-    else
-        mkdir -p "$1"
-    fi
+    if $DRY_RUN; then log_dry "mkdir -p $1"; else mkdir -p "$1"; fi
 }
 
 run_cp() {
-    if $DRY_RUN; then
-        log_dry "cp $1 -> $2"
-    else
-        cp "$1" "$2"
-    fi
-}
-
-run_cp_r() {
-    if $DRY_RUN; then
-        log_dry "cp -r $1 -> $2"
-    else
-        cp -r "$1" "$2"
-    fi
-}
-
-run_rm() {
-    if $DRY_RUN; then
-        log_dry "rm -f $1"
-    else
-        rm -f "$1"
-    fi
+    if $DRY_RUN; then log_dry "cp $1 -> $2"; else cp "$1" "$2"; fi
 }
 
 run_rm_r() {
+    if $DRY_RUN; then log_dry "rm -rf $1"; else rm -rf "$1"; fi
+}
+
+# Copy a directory tree, excluding VCS and OS cruft.
+copy_tree() {
+    local src="$1" dst="$2"
     if $DRY_RUN; then
-        log_dry "rm -rf $1"
+        log_dry "copy tree $src -> $dst"
+        return
+    fi
+    rm -rf "$dst"
+    mkdir -p "$dst"
+    if command -v rsync &>/dev/null; then
+        rsync -a --exclude '.git' --exclude '.DS_Store' "${src}/" "${dst}/"
     else
-        rm -rf "$1"
+        (cd "$src" && tar -cf - --exclude '.git' --exclude '.DS_Store' .) | (cd "$dst" && tar -xf -)
     fi
 }
 
-# ============================================================
-# External plugin definitions
-# ============================================================
-
-PLUGIN_NAMES=(
-    "superpowers"
-    "gstack"
-    "impeccable"
-    "oh-my-claudecode"
-    "marketingskills"
-    "no-use-effect"
-    "everything-claude-code"
-)
-
-PLUGIN_URLS=(
-    "https://github.com/obra/superpowers.git"
-    "https://github.com/garrytan/gstack.git"
-    "https://github.com/pbakaus/impeccable.git"
-    "https://github.com/Yeachan-Heo/oh-my-claudecode.git"
-    "https://github.com/coreyhaines31/marketingskills.git"
-    "https://github.com/alejandrobailo/no-use-effect.git"
-    "https://github.com/affaan-m/everything-claude-code.git"
-)
-
-# Plugins handled by the Claude Code marketplace (auto-update, no manual clone needed)
-MARKETPLACE_PLUGINS=(superpowers impeccable everything-claude-code marketingskills)
-
-# Plugins that only exist as manual clones (marketplace doesn't have them)
-CLONE_ONLY_PLUGINS=(gstack oh-my-claudecode no-use-effect)
-
-# Agents by scope
-USER_AGENTS=(delavalom-reviewer delavalom-debugger delavalom-researcher)
-PROJECT_AGENTS=(delavalom-k8s-ops delavalom-data-eng delavalom-frontend delavalom-content)
+# Names of the skills this repo ships, derived from the repo itself.
+stack_skill_names() {
+    local d
+    for d in "${STACK_SKILLS}"/*/; do
+        [[ -f "${d}SKILL.md" ]] && basename "$d"
+    done
+}
 
 # ============================================================
 # Parse arguments
@@ -142,7 +91,6 @@ PROJECT_AGENTS=(delavalom-k8s-ops delavalom-data-eng delavalom-frontend delavalo
 
 MODE="full"
 DRY_RUN=false
-SKIP_PLUGINS=false
 SKIP_SHELL=false
 PROJECT_TARGET=""
 
@@ -150,65 +98,42 @@ print_help() {
     echo "Usage: bash install.sh [MODE] [OPTIONS]"
     echo ""
     echo "Modes (pick one):"
-    echo "  --full             Full install: agents + skills + hooks + MCP + settings + plugins + shell (default)"
-    echo "  --reset            Clean reset: uninstall duplicates, reinstall with marketplace-first strategy"
-    echo "  --project [PATH]   Copy stack into another project's .claude/ directory"
-    echo "  --user             Install user-level agents to ~/.claude/agents/ only"
-    echo "  --minimal          Agents + CLAUDE.md only, no plugins"
-    echo "  --agents           Install only the 7 custom sub-agents"
-    echo "  --uninstall        Remove all Delavalom-specific files"
+    echo "  --full             Skills + CLAUDE.md + settings + shell (default)"
+    echo "  --skills           Install the skills to ~/.claude/skills/ only"
+    echo "  --project [PATH]   Copy the stack into another project's .claude/ directory"
+    echo "  --uninstall        Remove installed skills and the .zshrc source line"
     echo ""
     echo "Options:"
-    echo "  --dry-run          Show what would be installed without doing it"
-    echo "  --skip-plugins     Full install but skip external plugin cloning"
-    echo "  --skip-shell       Full install but skip shell/ZSH configuration"
+    echo "  --dry-run          Show what would happen without changing anything"
+    echo "  --skip-shell       Full install but skip mise/starship/zsh configuration"
     echo "  --help, -h         Show this help message"
     echo ""
     echo "Examples:"
-    echo "  bash install.sh                          # Full install with all plugins"
-    echo "  bash install.sh --reset                  # Clean reset, marketplace-first (no duplicates)"
-    echo "  bash install.sh --reset --dry-run        # Preview what --reset would do"
-    echo "  bash install.sh --full --skip-plugins    # Full install, no external plugins"
-    echo "  bash install.sh --project /path/to/app   # Copy stack into another project"
-    echo "  bash install.sh --project                # Copy stack into current directory"
-    echo "  bash install.sh --dry-run                # Preview what would happen"
-    echo "  bash install.sh --minimal --dry-run      # Preview minimal install"
+    echo "  bash install.sh                          # Full install"
+    echo "  bash install.sh --skills                 # Just the skills"
+    echo "  bash install.sh --project /path/to/app   # Copy the stack into another project"
+    echo "  bash install.sh --project                # Copy the stack into the current directory"
+    echo "  bash install.sh --full --dry-run         # Preview a full install"
     exit 0
 }
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --full)
-            MODE="full"; shift ;;
-        --reset)
-            MODE="reset"; shift ;;
+        --full)      MODE="full"; shift ;;
+        --skills)    MODE="skills"; shift ;;
         --project)
             MODE="project"
             shift
-            # Next argument is the target path if it exists and is not a flag
             if [[ $# -gt 0 && ! "$1" =~ ^-- ]]; then
                 PROJECT_TARGET="$1"
                 shift
             fi
             ;;
-        --user)
-            MODE="user"; shift ;;
-        --minimal)
-            MODE="minimal"; shift ;;
-        --agents)
-            MODE="agents"; shift ;;
-        --uninstall)
-            MODE="uninstall"; shift ;;
-        --dry-run)
-            DRY_RUN=true; shift ;;
-        --skip-plugins)
-            SKIP_PLUGINS=true; shift ;;
-        --skip-shell)
-            SKIP_SHELL=true; shift ;;
-        --help|-h)
-            print_help ;;
-        *)
-            die "Unknown option: $1 (use --help for usage)" ;;
+        --uninstall) MODE="uninstall"; shift ;;
+        --dry-run)   DRY_RUN=true; shift ;;
+        --skip-shell) SKIP_SHELL=true; shift ;;
+        --help|-h)   print_help ;;
+        *)           die "Unknown option: $1 (use --help for usage)" ;;
     esac
 done
 
@@ -220,46 +145,36 @@ do_uninstall() {
     print_banner
     log_step "Uninstalling Delavalom Stack..."
 
-    # Remove user-level agents
-    for agent in "${USER_AGENTS[@]}"; do
-        if [[ -f "${CLAUDE_HOME}/agents/${agent}.md" ]]; then
-            run_rm "${CLAUDE_HOME}/agents/${agent}.md"
-            log_ok "Removed user agent: ${agent}"
+    local name removed=0
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        if [[ -e "${USER_SKILLS}/${name}" ]]; then
+            run_rm_r "${USER_SKILLS}/${name}"
+            log_ok "Removed skill: ${name}"
+            removed=$((removed + 1))
         fi
-    done
+    done < <(stack_skill_names)
+    [[ $removed -eq 0 ]] && log_info "No stack skills found in ${USER_SKILLS}"
 
-    # Remove project-level agents
-    for agent in "${PROJECT_AGENTS[@]}"; do
-        if [[ -f "${PROJECT_CLAUDE}/agents/${agent}.md" ]]; then
-            run_rm "${PROJECT_CLAUDE}/agents/${agent}.md"
-            log_ok "Removed project agent: ${agent}"
+    local zshrc="${HOME}/.zshrc"
+    local marker="# delavalom-stack shell config"
+    if [[ -f "$zshrc" ]] && grep -qF "$marker" "$zshrc"; then
+        if $DRY_RUN; then
+            log_dry "Would remove the delavalom-stack block from ${zshrc}"
+        else
+            cp "$zshrc" "${zshrc}.bak"
+            grep -vF -e "$marker" -e "${SCRIPT_DIR}/shell/delavalom.zsh" "$zshrc" > "${zshrc}.tmp"
+            mv "${zshrc}.tmp" "$zshrc"
+            log_ok "Removed source line from .zshrc (backup at .zshrc.bak)"
         fi
-    done
-
-    # Remove external plugins
-    for name in "${PLUGIN_NAMES[@]}"; do
-        if [[ -d "${SKILLS_DIR}/${name}" ]]; then
-            run_rm_r "${SKILLS_DIR}/${name}"
-            log_ok "Removed plugin: ${name}"
-        fi
-    done
-
-    # Remove custom skills
-    for skill_dir in "${PROJECT_CLAUDE}/skills/delavalom-"*/; do
-        if [[ -d "$skill_dir" ]]; then
-            skill_name=$(basename "$skill_dir")
-            run_rm_r "$skill_dir"
-            log_ok "Removed custom skill: ${skill_name}"
-        fi
-    done
+    fi
 
     echo ""
     log_ok "Uninstall complete."
-    log_info "The following were preserved (remove manually if needed):"
-    echo -e "  ${DIM}${PROJECT_CLAUDE}/CLAUDE.md${NC}"
-    echo -e "  ${DIM}${PROJECT_CLAUDE}/settings.json${NC}"
-    echo -e "  ${DIM}${PROJECT_CLAUDE}/mcp.json${NC}"
-    echo -e "  ${DIM}${PROJECT_CLAUDE}/hooks/${NC}"
+    log_info "Preserved (remove manually if needed):"
+    echo -e "  ${DIM}~/.config/starship.toml${NC}"
+    echo -e "  ${DIM}~/.config/mise/config.toml${NC}"
+    echo -e "  ${DIM}mise-managed runtimes${NC}"
 }
 
 if [[ "$MODE" == "uninstall" ]]; then
@@ -283,286 +198,136 @@ echo ""
 
 log_step "Checking prerequisites..."
 
-if ! command -v git &>/dev/null; then
-    die "git is required but not found in PATH"
-fi
+[[ -d "$STACK_SKILLS" ]] || die "Skills not found at ${STACK_SKILLS} -- run this script from the delavalom-stack repo"
 
-if ! command -v claude &>/dev/null; then
-    log_warn "Claude Code CLI not found in PATH. Files will still be installed."
+if command -v claude &>/dev/null; then
+    log_ok "Claude Code found: $(claude --version 2>/dev/null || echo unknown)"
 else
-    CLAUDE_VERSION=$(claude --version 2>/dev/null || echo "unknown")
-    log_ok "Claude Code found: ${CLAUDE_VERSION}"
-fi
-
-# Verify source files exist
-if [[ ! -d "$PROJECT_CLAUDE" ]]; then
-    die "Source directory not found: ${PROJECT_CLAUDE} -- run this script from the delavalom-stack repo"
+    log_warn "Claude Code CLI not found in PATH. Files will still be installed."
 fi
 
 # ============================================================
-# Install: user-level agents
+# Install: skills to ~/.claude/skills/
 # ============================================================
 
-install_user_agents() {
-    log_step "Installing user-level agents to ~/.claude/agents/..."
-    run_mkdir "${CLAUDE_HOME}/agents"
+install_skills() {
+    log_step "Installing skills to ${USER_SKILLS}/..."
+    run_mkdir "$USER_SKILLS"
 
-    for agent in "${USER_AGENTS[@]}"; do
-        local src="${PROJECT_CLAUDE}/agents/${agent}.md"
-        local dst="${CLAUDE_HOME}/agents/${agent}.md"
-        if [[ -f "$src" ]]; then
-            run_cp "$src" "$dst"
-            log_ok "User agent: ${agent}"
-            INSTALLED_AGENTS=$((INSTALLED_AGENTS + 1))
-        else
-            log_warn "Source not found: ${src}"
+    local backup_dir=""
+    local name
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        local dst="${USER_SKILLS}/${name}"
+
+        # Back up anything already there that isn't identical to what we ship.
+        if [[ -e "$dst" || -L "$dst" ]]; then
+            if [[ -d "$dst" && ! -L "$dst" ]] && diff -rq "${STACK_SKILLS}/${name}" "$dst" &>/dev/null; then
+                : # already identical, nothing to preserve
+            else
+                if [[ -z "$backup_dir" ]]; then
+                    backup_dir="${BACKUP_ROOT}/delavalom-stack-$(date +%Y%m%d_%H%M%S)"
+                    run_mkdir "$backup_dir"
+                fi
+                if $DRY_RUN; then
+                    log_dry "Would back up ${dst} -> ${backup_dir}/${name}"
+                else
+                    cp -R "$dst" "${backup_dir}/${name}"
+                fi
+                log_info "Backed up existing: ${name}"
+            fi
         fi
-    done
-}
 
-# ============================================================
-# Install: project-level agents (verify in-place)
-# ============================================================
-
-install_project_agents() {
-    log_step "Verifying project-level agents in .claude/agents/..."
-
-    for agent in "${PROJECT_AGENTS[@]}"; do
-        local src="${PROJECT_CLAUDE}/agents/${agent}.md"
-        if [[ -f "$src" ]]; then
-            log_ok "Project agent: ${agent} (in-place)"
-            INSTALLED_AGENTS=$((INSTALLED_AGENTS + 1))
-        else
-            log_warn "Project agent missing: ${agent}"
-        fi
-    done
-}
-
-# ============================================================
-# Install: CLAUDE.md
-# ============================================================
-
-install_claude_md() {
-    log_step "Verifying master CLAUDE.md..."
-    if [[ -f "${PROJECT_CLAUDE}/CLAUDE.md" ]]; then
-        local lines
-        lines=$(wc -l < "${PROJECT_CLAUDE}/CLAUDE.md" | tr -d ' ')
-        log_ok "CLAUDE.md present (${lines} lines)"
-    else
-        log_warn "CLAUDE.md not found -- stack will lack full context"
-    fi
-}
-
-# ============================================================
-# Install: custom skills
-# ============================================================
-
-install_custom_skills() {
-    log_step "Verifying custom skills..."
-
-    for skill_dir in "${PROJECT_CLAUDE}/skills/delavalom-"*/; do
-        if [[ -d "$skill_dir" ]] && [[ -f "${skill_dir}/SKILL.md" ]]; then
-            local skill_name
-            skill_name=$(basename "$skill_dir")
-            log_ok "Custom skill: ${skill_name}"
-            INSTALLED_SKILLS=$((INSTALLED_SKILLS + 1))
-        fi
-    done
+        copy_tree "${STACK_SKILLS}/${name}" "$dst"
+        log_ok "Skill: ${name}"
+        INSTALLED_SKILLS=$((INSTALLED_SKILLS + 1))
+    done < <(stack_skill_names)
 
     if [[ $INSTALLED_SKILLS -eq 0 ]]; then
-        log_warn "No custom skills found in ${PROJECT_CLAUDE}/skills/"
+        log_warn "No skills found in ${STACK_SKILLS}"
     else
-        echo -e "  ${GREEN}${INSTALLED_SKILLS} custom skills verified${NC}"
+        echo -e "  ${GREEN}${INSTALLED_SKILLS} skills installed${NC}"
     fi
+    [[ -n "$backup_dir" ]] && log_info "Backups: ${backup_dir}"
 }
 
 # ============================================================
-# Install: hooks
+# Install: CLAUDE.md and settings.json (verify in place)
 # ============================================================
 
-install_hooks() {
-    log_step "Verifying hooks configuration..."
+verify_context() {
+    log_step "Verifying stack context files..."
 
-    if [[ -f "${PROJECT_CLAUDE}/hooks/hooks.json" ]]; then
-        log_ok "hooks.json present"
-        INSTALLED_HOOKS=$((INSTALLED_HOOKS + 1))
+    if [[ -f "${STACK_CLAUDE}/CLAUDE.md" ]]; then
+        log_ok "CLAUDE.md present ($(wc -l < "${STACK_CLAUDE}/CLAUDE.md" | tr -d ' ') lines)"
     else
-        log_warn "hooks.json not found"
+        log_warn "CLAUDE.md not found -- the stack will lack project context"
     fi
-}
 
-# ============================================================
-# Install: MCP config
-# ============================================================
-
-install_mcp() {
-    log_step "Verifying MCP configuration..."
-
-    if [[ -f "${PROJECT_CLAUDE}/mcp.json" ]]; then
-        local server_count="?"
-        if command -v python3 &>/dev/null; then
-            server_count=$(python3 -c "
-import json, sys
-try:
-    data = json.load(open('${PROJECT_CLAUDE}/mcp.json'))
-    print(len(data.get('mcpServers', {})))
-except Exception:
-    print('?')
-" 2>/dev/null || echo "?")
-        fi
-        log_ok "MCP config present (${server_count} servers)"
+    if [[ -f "${STACK_CLAUDE}/settings.json" ]]; then
+        log_ok "settings.json present"
     else
-        log_warn "mcp.json not found"
+        log_warn "settings.json not found"
     fi
 }
 
 # ============================================================
-# Install: settings (agent teams flag)
-# ============================================================
-
-install_settings() {
-    log_step "Configuring settings.json..."
-
-    local settings_file="${PROJECT_CLAUDE}/settings.json"
-
-    if $DRY_RUN; then
-        log_dry "Would enable agent teams in ${settings_file}"
-        return
-    fi
-
-    if [[ -f "$settings_file" ]] && command -v python3 &>/dev/null; then
-        python3 -c "
-import json
-with open('${settings_file}', 'r') as f:
-    settings = json.load(f)
-settings.setdefault('env', {})['CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS'] = '1'
-with open('${settings_file}', 'w') as f:
-    json.dump(settings, f, indent=2)
-" 2>/dev/null && log_ok "Agent teams enabled in settings.json" || {
-            log_warn "Could not update settings.json with python3"
-        }
-    elif [[ ! -f "$settings_file" ]]; then
-        echo '{ "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" } }' > "$settings_file"
-        log_ok "Created settings.json with agent teams enabled"
-    else
-        log_warn "python3 not found -- settings.json not updated"
-    fi
-}
-
-# ============================================================
-# Install: external plugins
-# ============================================================
-
-install_plugins() {
-    log_step "Installing external plugins to ~/.claude/skills/..."
-    run_mkdir "$SKILLS_DIR"
-
-    local i
-    for i in "${!PLUGIN_NAMES[@]}"; do
-        local name="${PLUGIN_NAMES[$i]}"
-        local dest="${SKILLS_DIR}/${name}"
-        local url="${PLUGIN_URLS[$i]}"
-
-        if [[ -d "$dest" ]]; then
-            log_ok "Plugin already installed: ${name} (skipped)"
-            INSTALLED_PLUGINS=$((INSTALLED_PLUGINS + 1))
-            continue
-        fi
-
-        if $DRY_RUN; then
-            log_dry "git clone --depth 1 ${url} ${dest}"
-            INSTALLED_PLUGINS=$((INSTALLED_PLUGINS + 1))
-            continue
-        fi
-
-        echo -e "  ${CYAN}Cloning ${name}...${NC}"
-        if git clone --depth 1 "$url" "$dest" 2>/dev/null; then
-            log_ok "Plugin installed: ${name}"
-            INSTALLED_PLUGINS=$((INSTALLED_PLUGINS + 1))
-
-            # gstack needs post-clone setup
-            if [[ "$name" == "gstack" ]] && [[ -x "${dest}/setup" ]]; then
-                echo -e "  ${CYAN}Running gstack setup...${NC}"
-                if (cd "$dest" && ./setup) 2>/dev/null; then
-                    log_ok "gstack setup complete"
-                else
-                    log_warn "gstack setup script failed (plugin still usable)"
-                fi
-            fi
-        else
-            log_err "Failed to clone: ${name} (${url})"
-            FAILED_PLUGINS=$((FAILED_PLUGINS + 1))
-            PLUGIN_FAILURES+=("$name")
-        fi
-    done
-
-    echo -e "  ${GREEN}${INSTALLED_PLUGINS}/${#PLUGIN_NAMES[@]} plugins ready${NC}"
-}
-
-# ============================================================
-# Install: shell configuration (starship + zsh)
+# Install: shell configuration
 # ============================================================
 
 install_shell() {
     log_step "Installing shell configuration..."
 
     local shell_dir="${SCRIPT_DIR}/shell"
-
     if [[ ! -d "$shell_dir" ]]; then
         log_warn "shell/ directory not found -- skipping shell setup"
         return
     fi
 
-    # Install mise (single tool manager for all runtimes)
+    # mise: single tool manager for all runtimes
     if command -v mise &>/dev/null || [[ -x "$HOME/.local/bin/mise" ]]; then
-        local mise_ver
-        mise_ver=$("$HOME/.local/bin/mise" --version 2>/dev/null || mise --version 2>/dev/null || echo "unknown")
-        log_ok "mise already installed: ${mise_ver}"
+        log_ok "mise already installed: $("$HOME/.local/bin/mise" --version 2>/dev/null || mise --version 2>/dev/null || echo unknown)"
     else
         if $DRY_RUN; then
             log_dry "Would install mise via curl https://mise.run"
         else
-            log_step "Installing mise (tool manager for node, python, go, rust, bun, java)..."
-            curl -sSf https://mise.run | sh 2>/dev/null && log_ok "mise installed" || log_warn "mise install failed -- install manually: curl https://mise.run | sh"
+            log_step "Installing mise (node, python, go, rust, bun, java)..."
+            curl -sSf https://mise.run | sh 2>/dev/null && log_ok "mise installed" \
+                || log_warn "mise install failed -- install manually: curl https://mise.run | sh"
         fi
     fi
 
-    # Copy mise.toml as global config
-    local mise_toml="${SCRIPT_DIR}/../mise.toml"
+    local mise_toml="${SCRIPT_DIR}/mise.toml"
     local global_mise="${HOME}/.config/mise/config.toml"
 
     if [[ -f "$mise_toml" ]]; then
         if $DRY_RUN; then
             log_dry "Would copy mise.toml to ${global_mise}"
+        elif [[ ! -f "$global_mise" ]]; then
+            mkdir -p "${HOME}/.config/mise"
+            cp "$mise_toml" "$global_mise"
+            log_ok "mise.toml installed as global config"
         else
-            if [[ ! -f "$global_mise" ]]; then
-                run_mkdir "${HOME}/.config/mise"
-                cp "$mise_toml" "$global_mise"
-                log_ok "mise.toml installed as global config"
-            else
-                log_info "Global mise config already exists (${global_mise})"
-            fi
+            log_info "Global mise config already exists (${global_mise})"
         fi
 
-        # Install all tools from mise.toml
         local mise_cmd=""
         [[ -x "$HOME/.local/bin/mise" ]] && mise_cmd="$HOME/.local/bin/mise"
         command -v mise &>/dev/null && mise_cmd="mise"
 
         if [[ -n "$mise_cmd" ]]; then
             if $DRY_RUN; then
-                log_dry "Would run: mise install (node, python, go, rust, bun, java)"
+                log_dry "Would run: mise install"
             else
                 log_step "Installing runtimes via mise..."
                 "$mise_cmd" trust "$mise_toml" 2>/dev/null || true
-                "$mise_cmd" install --yes 2>/dev/null && log_ok "All runtimes installed via mise" || {
-                    log_warn "Some runtimes failed. Run 'mise install' manually after setup."
-                }
+                "$mise_cmd" install --yes 2>/dev/null && log_ok "All runtimes installed via mise" \
+                    || log_warn "Some runtimes failed. Run 'mise install' manually after setup."
             fi
         fi
     fi
 
-    # Install starship config
+    # starship prompt
     local starship_src="${shell_dir}/starship.toml"
     local starship_dst="${HOME}/.config/starship.toml"
 
@@ -570,39 +335,33 @@ install_shell() {
         if $DRY_RUN; then
             log_dry "Would install starship.toml to ${starship_dst}"
         else
-            run_mkdir "${HOME}/.config"
-            if [[ -f "$starship_dst" ]]; then
-                if ! diff -q "$starship_src" "$starship_dst" &>/dev/null; then
-                    cp "$starship_dst" "${starship_dst}.bak"
-                    log_info "Backed up existing starship.toml"
-                fi
+            mkdir -p "${HOME}/.config"
+            if [[ -f "$starship_dst" ]] && ! diff -q "$starship_src" "$starship_dst" &>/dev/null; then
+                cp "$starship_dst" "${starship_dst}.bak"
+                log_info "Backed up existing starship.toml"
             fi
             cp "$starship_src" "$starship_dst"
             log_ok "starship.toml installed (gruvbox dark)"
         fi
     fi
 
-    # Add source line to .zshrc
+    # .zshrc source line
     local zshrc="${HOME}/.zshrc"
-    local source_line="source \"${shell_dir}/delavalom.zsh\""
     local marker="# delavalom-stack shell config"
 
     if [[ -f "$zshrc" ]] && grep -qF "$marker" "$zshrc"; then
         log_ok ".zshrc already configured"
+    elif $DRY_RUN; then
+        log_dry "Would add source line to ${zshrc}"
     else
-        if $DRY_RUN; then
-            log_dry "Would add source line to ${zshrc}"
-        else
-            {
-                echo ""
-                echo "$marker"
-                echo "$source_line"
-            } >> "$zshrc"
-            log_ok "Added delavalom.zsh source line to .zshrc"
-        fi
+        {
+            echo ""
+            echo "$marker"
+            echo "source \"${shell_dir}/delavalom.zsh\""
+        } >> "$zshrc"
+        log_ok "Added delavalom.zsh source line to .zshrc"
     fi
 
-    # Check for remaining brew dependencies (starship can also be installed via mise)
     local missing_deps=()
     command -v starship &>/dev/null || missing_deps+=(starship)
     if command -v brew &>/dev/null; then
@@ -617,251 +376,59 @@ install_shell() {
 }
 
 # ============================================================
-# --project mode: copy stack into another project
+# --project mode: copy the stack into another project
 # ============================================================
 
 do_project_install() {
-    # Resolve target directory
-    local target
-    if [[ -n "$PROJECT_TARGET" ]]; then
-        target="$PROJECT_TARGET"
-    else
-        target="$(pwd)"
-    fi
-
-    # Don't install into self
+    local target="${PROJECT_TARGET:-$(pwd)}"
     local abs_target
     abs_target="$(cd "$target" 2>/dev/null && pwd)" || die "Target directory does not exist: ${target}"
-    if [[ "$abs_target" == "$SCRIPT_DIR" ]]; then
-        die "Cannot use --project to install into the stack repo itself. Use --full instead."
-    fi
+    [[ "$abs_target" == "$SCRIPT_DIR" ]] && die "Cannot use --project on the stack repo itself. Use --full instead."
 
     local target_claude="${abs_target}/.claude"
-
     log_step "Project install target: ${abs_target}"
 
-    # Backup existing .claude/ if present
     if [[ -d "$target_claude" ]]; then
-        local timestamp
-        timestamp=$(date +%Y%m%d_%H%M%S)
-        local backup_dir="${abs_target}/.claude.bak.${timestamp}"
-        log_info "Backing up existing .claude/ to .claude.bak.${timestamp}/"
+        local backup_dir="${abs_target}/.claude.bak.$(date +%Y%m%d_%H%M%S)"
         if $DRY_RUN; then
             log_dry "cp -r ${target_claude} ${backup_dir}"
         else
             cp -r "$target_claude" "$backup_dir"
         fi
-        log_ok "Backup created"
+        log_ok "Backed up existing .claude/ to $(basename "$backup_dir")/"
     fi
 
-    # Create directory structure
-    run_mkdir "${target_claude}/agents"
     run_mkdir "${target_claude}/skills"
-    run_mkdir "${target_claude}/hooks"
 
-    # Copy agents (all 7)
-    log_step "Copying agents..."
-    for agent in "${USER_AGENTS[@]}" "${PROJECT_AGENTS[@]}"; do
-        local src="${PROJECT_CLAUDE}/agents/${agent}.md"
-        if [[ -f "$src" ]]; then
-            run_cp "$src" "${target_claude}/agents/${agent}.md"
-            log_ok "Agent: ${agent}"
-            INSTALLED_AGENTS=$((INSTALLED_AGENTS + 1))
-        else
-            log_warn "Agent source missing: ${agent}"
-        fi
-    done
+    log_step "Copying skills..."
+    local name
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        copy_tree "${STACK_SKILLS}/${name}" "${target_claude}/skills/${name}"
+        log_ok "Skill: ${name}"
+        INSTALLED_SKILLS=$((INSTALLED_SKILLS + 1))
+    done < <(stack_skill_names)
 
-    # Copy custom skills
-    log_step "Copying custom skills..."
-    for skill_dir in "${PROJECT_CLAUDE}/skills/delavalom-"*/; do
-        if [[ -d "$skill_dir" ]]; then
-            local skill_name
-            skill_name=$(basename "$skill_dir")
-            run_cp_r "$skill_dir" "${target_claude}/skills/${skill_name}"
-            log_ok "Skill: ${skill_name}"
-            INSTALLED_SKILLS=$((INSTALLED_SKILLS + 1))
-        fi
-    done
-
-    # Copy hooks
-    log_step "Copying hooks..."
-    if [[ -f "${PROJECT_CLAUDE}/hooks/hooks.json" ]]; then
-        run_cp "${PROJECT_CLAUDE}/hooks/hooks.json" "${target_claude}/hooks/hooks.json"
-        log_ok "hooks.json"
-        INSTALLED_HOOKS=$((INSTALLED_HOOKS + 1))
-    fi
-
-    # Copy CLAUDE.md
-    log_step "Copying CLAUDE.md..."
-    if [[ -f "${PROJECT_CLAUDE}/CLAUDE.md" ]]; then
-        run_cp "${PROJECT_CLAUDE}/CLAUDE.md" "${target_claude}/CLAUDE.md"
-        log_ok "CLAUDE.md"
-    fi
-
-    # Copy settings.json
-    log_step "Copying settings.json..."
-    if [[ -f "${PROJECT_CLAUDE}/settings.json" ]]; then
-        run_cp "${PROJECT_CLAUDE}/settings.json" "${target_claude}/settings.json"
-        log_ok "settings.json"
-    fi
-
-    # Copy mcp.json
-    log_step "Copying mcp.json..."
-    if [[ -f "${PROJECT_CLAUDE}/mcp.json" ]]; then
-        run_cp "${PROJECT_CLAUDE}/mcp.json" "${target_claude}/mcp.json"
-        log_ok "mcp.json"
-    fi
-
-    log_info "External plugins are NOT installed in --project mode."
-    log_info "Run 'bash install.sh --full' from the stack repo to install plugins to ~/.claude/skills/."
+    log_step "Copying context files..."
+    [[ -f "${STACK_CLAUDE}/CLAUDE.md" ]] && { run_cp "${STACK_CLAUDE}/CLAUDE.md" "${target_claude}/CLAUDE.md"; log_ok "CLAUDE.md"; }
+    [[ -f "${STACK_CLAUDE}/settings.json" ]] && { run_cp "${STACK_CLAUDE}/settings.json" "${target_claude}/settings.json"; log_ok "settings.json"; }
 }
 
 # ============================================================
-# Reset: marketplace-first clean install
-# ============================================================
-
-do_reset() {
-    print_banner
-    log_step "RESET MODE — marketplace-first, zero duplication"
-    echo ""
-
-    # Step 1: Remove manual clones that the marketplace already provides
-    log_step "Step 1/4: Removing manual clones that overlap with marketplace..."
-    for name in "${MARKETPLACE_PLUGINS[@]}"; do
-        local dest="${SKILLS_DIR}/${name}"
-        if [[ -d "$dest" ]]; then
-            run_rm_r "$dest"
-            log_ok "Removed duplicate manual clone: ${name}"
-        else
-            log_info "Already clean: ${name}"
-        fi
-    done
-
-    # Step 2: Remove stale symlinks (gstack symlinks, etc.)
-    log_step "Step 2/4: Cleaning stale symlinks in ~/.claude/skills/..."
-    if $DRY_RUN; then
-        log_dry "Would remove broken symlinks from ${SKILLS_DIR}"
-    else
-        local stale_count=0
-        while IFS= read -r -d '' link; do
-            if [[ ! -e "$link" ]]; then
-                rm -f "$link"
-                log_ok "Removed stale symlink: $(basename "$link")"
-                stale_count=$((stale_count + 1))
-            fi
-        done < <(find "$SKILLS_DIR" -maxdepth 1 -type l -print0 2>/dev/null)
-        if [[ $stale_count -eq 0 ]]; then
-            log_info "No stale symlinks found"
-        fi
-    fi
-
-    # Step 3: Reinstall clone-only plugins (gstack, oh-my-claudecode, no-use-effect)
-    log_step "Step 3/4: Installing clone-only plugins (not on marketplace)..."
-    local clone_i
-    for clone_i in "${!PLUGIN_NAMES[@]}"; do
-        local name="${PLUGIN_NAMES[$clone_i]}"
-        local url="${PLUGIN_URLS[$clone_i]}"
-        local dest="${SKILLS_DIR}/${name}"
-
-        # Skip marketplace plugins — they're handled by `claude plugins install`
-        local is_marketplace=false
-        for mp in "${MARKETPLACE_PLUGINS[@]}"; do
-            [[ "$name" == "$mp" ]] && is_marketplace=true && break
-        done
-        if $is_marketplace; then
-            continue
-        fi
-
-        if [[ -d "$dest" ]]; then
-            log_ok "Already installed: ${name} (skipped)"
-            INSTALLED_PLUGINS=$((INSTALLED_PLUGINS + 1))
-            continue
-        fi
-
-        if $DRY_RUN; then
-            log_dry "git clone --depth 1 ${url} ${dest}"
-            INSTALLED_PLUGINS=$((INSTALLED_PLUGINS + 1))
-            continue
-        fi
-
-        echo -e "  ${CYAN}Cloning ${name}...${NC}"
-        if git clone --depth 1 "$url" "$dest" 2>/dev/null; then
-            log_ok "Installed: ${name}"
-            INSTALLED_PLUGINS=$((INSTALLED_PLUGINS + 1))
-
-            if [[ "$name" == "gstack" ]] && [[ -x "${dest}/setup" ]]; then
-                echo -e "  ${CYAN}Running gstack setup...${NC}"
-                (cd "$dest" && ./setup) 2>/dev/null && log_ok "gstack setup complete" || log_warn "gstack setup failed"
-            fi
-        else
-            log_err "Failed to clone: ${name}"
-            FAILED_PLUGINS=$((FAILED_PLUGINS + 1))
-            PLUGIN_FAILURES+=("$name")
-        fi
-    done
-
-    # Step 4: Reinstall stack (agents, CLAUDE.md, hooks, MCP, settings, shell)
-    log_step "Step 4/4: Reinstalling delavalom stack components..."
-    install_user_agents
-    install_project_agents
-    install_claude_md
-    install_custom_skills
-    install_hooks
-    install_mcp
-    install_settings
-    if ! $SKIP_SHELL; then
-        install_shell
-    else
-        log_info "Skipping shell configuration (--skip-shell)"
-    fi
-
-    echo ""
-    log_ok "Reset complete — marketplace handles: ${MARKETPLACE_PLUGINS[*]}"
-    log_ok "Manual clones handle: ${CLONE_ONLY_PLUGINS[*]}"
-}
-
-# ============================================================
-# Mode dispatch
+# Run
 # ============================================================
 
 case "$MODE" in
     full)
-        install_user_agents
-        install_project_agents
-        install_claude_md
-        install_custom_skills
-        install_hooks
-        install_mcp
-        install_settings
-        if ! $SKIP_PLUGINS; then
-            install_plugins
-        else
-            log_info "Skipping external plugins (--skip-plugins)"
-        fi
-        if ! $SKIP_SHELL; then
-            install_shell
-        else
-            log_info "Skipping shell configuration (--skip-shell)"
-        fi
+        install_skills
+        verify_context
+        $SKIP_SHELL || install_shell
         ;;
-    reset)
-        do_reset
+    skills)
+        install_skills
         ;;
     project)
         do_project_install
-        ;;
-    user)
-        install_user_agents
-        ;;
-    minimal)
-        install_user_agents
-        install_project_agents
-        install_claude_md
-        ;;
-    agents)
-        install_user_agents
-        install_project_agents
         ;;
 esac
 
@@ -870,51 +437,19 @@ esac
 # ============================================================
 
 echo ""
-echo -e "${PURPLE}====================================================${NC}"
-if $DRY_RUN; then
-    echo -e "${BOLD}${YELLOW}  DRY RUN COMPLETE -- No changes were made${NC}"
-else
-    echo -e "${BOLD}${GREEN}  DELAVALOM STACK INSTALLED SUCCESSFULLY${NC}"
-fi
-echo -e "${PURPLE}====================================================${NC}"
+echo -e "${PURPLE}  +===================================================+${NC}"
+echo -e "${PURPLE}  |                  INSTALL SUMMARY                  |${NC}"
+echo -e "${PURPLE}  +===================================================+${NC}"
 echo ""
-echo -e "  ${CYAN}Mode:${NC}       ${BOLD}${MODE}${NC}"
-echo -e "  ${CYAN}Version:${NC}    ${VERSION}"
-
-if [[ $INSTALLED_AGENTS -gt 0 ]]; then
-    echo -e "  ${CYAN}Agents:${NC}     ${INSTALLED_AGENTS} installed (${#USER_AGENTS[@]} user + ${#PROJECT_AGENTS[@]} project)"
-fi
-if [[ $INSTALLED_SKILLS -gt 0 ]]; then
-    echo -e "  ${CYAN}Skills:${NC}     ${INSTALLED_SKILLS} custom skills"
-fi
-if [[ $INSTALLED_HOOKS -gt 0 ]]; then
-    echo -e "  ${CYAN}Hooks:${NC}      Workflow governance active"
-fi
-if [[ $INSTALLED_PLUGINS -gt 0 ]]; then
-    echo -e "  ${CYAN}Plugins:${NC}    ${INSTALLED_PLUGINS}/${#PLUGIN_NAMES[@]} external plugins"
-fi
-
-if [[ "$MODE" == "full" ]] || [[ "$MODE" == "minimal" ]] || [[ "$MODE" == "project" ]]; then
-    echo -e "  ${CYAN}Config:${NC}     CLAUDE.md + settings.json + mcp.json"
-fi
-
-# Report failures
-if [[ $FAILED_PLUGINS -gt 0 ]]; then
-    echo ""
-    echo -e "  ${RED}Failures:${NC}   ${FAILED_PLUGINS} plugin(s) failed to install:"
-    for fail in "${PLUGIN_FAILURES[@]}"; do
-        echo -e "              ${RED}- ${fail}${NC}"
-    done
-    echo -e "  ${YELLOW}Re-run the installer or clone manually.${NC}"
-fi
-
+echo -e "  ${BOLD}Skills:${NC}  ${INSTALLED_SKILLS}"
+echo -e "  ${BOLD}Mode:${NC}    ${MODE}"
+$DRY_RUN && echo -e "  ${YELLOW}(dry run -- nothing was changed)${NC}"
 echo ""
-echo -e "  ${BOLD}Quick start:${NC}"
-echo -e "    ${CYAN}claude agents${NC}                         -- List all agents"
-echo -e "    ${CYAN}claude --agent delavalom-reviewer${NC}     -- Start a review session"
-echo -e "    ${CYAN}claude --agent delavalom-debugger${NC}     -- Debug with root cause analysis"
-echo -e "    ${CYAN}claude --agent delavalom-researcher${NC}   -- Research with web search"
-echo ""
-echo -e "  ${BOLD}The Delavalom Pipeline:${NC}"
-echo -e "    ${PURPLE}THINK${NC} -> ${BLUE}RESEARCH${NC} -> ${CYAN}PLAN${NC} -> ${GREEN}BUILD${NC} -> ${YELLOW}REVIEW${NC} -> ${RED}SECURE${NC} -> ${PURPLE}SHIP${NC} -> ${BLUE}REFLECT${NC}"
+
+if [[ "$MODE" == "full" || "$MODE" == "skills" ]]; then
+    log_info "Restart Claude Code (or run /doctor) to pick up the new skills."
+fi
+if [[ "$MODE" == "full" ]] && ! $SKIP_SHELL; then
+    log_info "Run 'exec zsh' to load the shell configuration."
+fi
 echo ""

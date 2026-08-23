@@ -7,3 +7,4 @@ node_modules/
 *.swo
 *~
 .claude.bak.*/
+.claude/settings.local.json

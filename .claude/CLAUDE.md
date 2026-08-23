@@ -6,28 +6,11 @@ Luis is a senior full-stack engineer, data engineer, and founder working across 
 
 Luis prefers thorough, structured work with clear reasoning behind every decision. He values DRY principles — write something once, make it reusable, and improve it iteratively. He already knows Claude Code well and wants to push it to maximum productivity.
 
-## Work Domains
+## What This Repo Is
 
-### Engineering & Infrastructure
-- Kubernetes orchestration, multi-cell architectures, service mesh
-- Multi-language codebases: Go (infrastructure), Python (data/ML), TypeScript (web), Rust (performance)
-- CI/CD pipelines, deployment automation, container management
-- Multiple applications: chat platforms, blogger deployment tools, custom frameworks
+A portable skill set. The 16 skills in `.claude/skills/` are the vendored copy of Luis's global `~/.claude/skills/` (minus the Clerk skills, which come from `~/.agents/`). `install.sh` copies them back to `~/.claude/skills/`, into another project, or sets up the shell.
 
-### Data Engineering & ML
-- Data pipelines connecting multiple sources (GitHub, Google, various content systems)
-- ML model serving, data quality, feature engineering
-- Finance file processing and analytics
-
-### Marketing & Go-to-Market
-- Content creation and distribution across platforms
-- SEO optimization and search presence
-- Conversion optimization, audience building
-- Personal brand development
-
-### Finance
-- Processing incoming finance documents
-- Reporting, analysis, budget tracking
+Everything else — sub-agents, hooks, MCP servers, agent teams, external plugin cloning — was removed in v3.0.0. Plugins are managed through the Claude Code marketplace (`claude plugin install`), not through this repo.
 
 ## Style Rules
 
@@ -37,27 +20,33 @@ Luis prefers thorough, structured work with clear reasoning behind every decisio
 4. **Iterative improvement** — start with a working version, then refine
 5. **Cross-project awareness** — always consider how a decision affects other projects in the stack
 
-## Installation
+## The Skills
 
-This stack is installed via `install.sh`. Run `bash install.sh --full` for the complete setup including all external plugins. See README.md for all installation modes.
+### Design & architecture
+- **architect** — sketch types, signatures, and module boundaries before writing code
+- **how** — explain how a subsystem works; placement, ownership, and layering questions
+- **why** — recover design rationale from source control, issues, docs, chat, and observability
+- **blast-radius** — find what a change breaks outside the diff, then prove it with real code
 
-## Active Skill Stack (Tiered Loading)
+### Engineering principles
+- **principle-model-the-domain** — encode the domain in a structure, not scattered conditionals
+- **principle-boundary-discipline** — concentrate validation at boundaries; keep logic pure
+- **principle-make-operations-idempotent** — converge to the same state across crashes and retries
+- **principle-prove-it-works** — verify against the real artifact before declaring done
 
-### Tier 1 — Always Active
-- **oh-my-claudecode** — Agent orchestration, smart model routing, token optimization
-- **superpowers** — TDD (RED-GREEN-REFACTOR), systematic debugging, code review patterns
-- **impeccable** — Frontend design quality enforcement, anti-generic-AI patterns
-- **no-use-effect** — React anti-patterns (always load for React projects, zero cost)
+### Verification & process
+- **create-verification-skill** — generate a project-local skill that drives the real app
+- **show-me-your-work** — keep a reviewable TSV decision trail for long or unattended runs
 
-### Tier 2 — Per Domain
-- **gstack** — Sprint workflows: /review, /qa, /ship, /cso, /canary, /retro
-- **marketingskills** — GTM, SEO, content, CRO, email
-- **everything-claude-code** — Cherry-pick specific skills (don't load entire pack)
+### Writing
+- **technical-writing** — Diátaxis structure, Google style, STE instructions, Global English
+- **unslop** — cut AI tells from any writing
+- **bro** — restate the last message in plain language, no jargon
 
-### Tier 3 — On Demand
-- **claude-mem** — Long-running project memory across sessions
-- **last30days-skill** — Real-time research (Reddit, X, YouTube, HN, Polymarket)
-- **claude-scientific-skills** — Scientific research projects only
+### Frontend & infrastructure
+- **no-use-effect** — always active; never write `useEffect` directly in React or React Native
+- **clone-webapp** — clone a live web app's frontend into a Next.js + Tailwind copy
+- **use-railway** — Railway projects, services, deployments, environments, and troubleshooting
 
 ## Workflow: The Delavalom Pipeline
 
@@ -65,43 +54,14 @@ This stack is installed via `install.sh`. Run `bash install.sh --full` for the c
 THINK → RESEARCH → PLAN → BUILD → REVIEW → SECURE → SHIP → REFLECT
 ```
 
-1. **Think** — OMC + superpowers brainstorming, define problem clearly
-2. **Research** — last30days for trends, WebSearch for context, competitive analysis
-3. **Plan** — gstack /plan-ceo-review, architecture decisions, scope definition
-4. **Build** — OMC agent delegation + superpowers TDD, parallel subagents for independent tasks
-5. **Review** — gstack /review (staff-engineer level) + impeccable /audit (frontend)
-6. **Secure** — gstack /cso (OWASP/STRIDE quick check)
-7. **Ship** — gstack /ship (release engineering) + /canary (post-deploy monitoring)
-8. **Reflect** — gstack /retro, save learnings to memory, update this context
-
-## Custom Sub-Agents (7)
-
-### User-Level (available across all projects via ~/.claude/agents/)
-- **delavalom-reviewer** — Staff-level code review (Sonnet, read-only tools)
-- **delavalom-debugger** — Root-cause analysis specialist (inherits model, full tools)
-- **delavalom-researcher** — Fast codebase exploration (Haiku, read-only, background)
-
-### Project-Level (available in this stack via .claude/agents/)
-- **delavalom-k8s-ops** — Kubernetes operations (Sonnet, uses delavalom-k8s skill)
-- **delavalom-data-eng** — Data pipeline specialist (inherits model, uses bruin patterns)
-- **delavalom-frontend** — Frontend with design enforcement (Sonnet, uses impeccable + no-use-effect)
-- **delavalom-content** — Content creation + distribution (Sonnet, uses delavalom-distribute skill)
-
-## Agent Teams
-
-Agent teams enable multi-instance coordination for tasks requiring parallel work with inter-agent communication. Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (already set in settings.json).
-
-### When to Use Teams vs Sub-Agents
-- **Single focused task** → Sub-agent
-- **Multiple independent tasks** → Parallel sub-agents
-- **Tasks requiring discussion/coordination** → Agent team
-- **Sequential dependent work** → Main conversation
-
-### Team Patterns
-- **Parallel Code Review** — 3 teammates review same PR from security, performance, test coverage
-- **Competing Hypothesis Debug** — 5 teammates investigate different root causes simultaneously
-- **Cross-Layer Feature Build** — Frontend, backend, and test teammates each own their domain
-- **Research Sprint** — Teammates research different segments/competitors in parallel
+1. **Think** — define the problem clearly; `architect` for anything non-trivial
+2. **Research** — `how` and `why` on existing code, WebSearch for outside context
+3. **Plan** — architecture decisions and scope, sketched before implementation
+4. **Build** — implement against the sketch, guided by the `principle-*` skills
+5. **Review** — `/code-review`, plus `blast-radius` on anything you don't trust
+6. **Secure** — `/security-review` before deployment
+7. **Ship** — `use-railway` or `/vercel:deploy` depending on the target
+8. **Reflect** — `principle-prove-it-works`, save learnings to memory, update this file
 
 ## Language Preferences
 
@@ -115,22 +75,10 @@ Agent teams enable multi-instance coordination for tasks requiring parallel work
 | Data pipelines | SQL + Python | Unified transforms |
 | Quick automation | Bash | Glue scripts, CI/CD |
 
-## MCP Servers (Curated)
-
-### Always On
-- github, filesystem, memory, sequential-thinking
-
-### Development
-- playwright, context7
-
-### Research & Content
-- exa-web-search
-
 ## Key Principles
 
 - **Context is currency** — minimize token waste, maximize signal-to-noise
-- **Layer, don't replace** — orchestration tools complement each other at different scales
-- **Progressive disclosure** — load SKILL.md first, dive into details only when needed
+- **Progressive disclosure** — load SKILL.md first, dive into references only when needed
 - **Memory is for the non-obvious** — don't save what you can derive from code or git
-- **Security is not optional** — run /cso before any deployment
+- **Security is not optional** — run `/security-review` before any deployment
 - **Cross-project learning** — patterns discovered in one project should propagate to others
