@@ -1,0 +1,49 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["findings", "no_cope_violations", "reviewed"],
+  "properties": {
+    "reviewed": {
+      "type": "string",
+      "description": "One line: what this diff appears to do, in the reviewer's own words."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "line", "severity", "claim", "failure_scenario", "confidence"],
+        "properties": {
+          "file": { "type": "string", "description": "Repo-relative path." },
+          "line": { "type": "integer", "description": "1-indexed line in the new file." },
+          "severity": { "type": "string", "enum": ["blocker", "major", "minor"] },
+          "claim": { "type": "string", "description": "One sentence stating the defect." },
+          "failure_scenario": {
+            "type": "string",
+            "description": "Concrete inputs or state, then the wrong output or crash. No hedging, no 'may cause'."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["proven", "likely", "speculative"],
+            "description": "proven = ran it and saw it fail. likely = traced the path in source. speculative = pattern match only."
+          }
+        }
+      }
+    },
+    "no_cope_violations": {
+      "type": "array",
+      "description": "Comments or messages in the diff that argue a problem is acceptable instead of fixing it.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "line", "quote", "why_it_is_a_cope"],
+        "properties": {
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "quote": { "type": "string" },
+          "why_it_is_a_cope": { "type": "string" }
+        }
+      }
+    }
+  }
+}

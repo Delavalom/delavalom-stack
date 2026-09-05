@@ -1,7 +1,7 @@
 {
   "name": "delavalom-stack",
-  "version": "3.0.0",
-  "description": "Portable Claude Code skill stack — 16 vendored skills for architecture, code archaeology, engineering principles, writing, and infrastructure, plus a mise/starship/zsh shell setup.",
+  "version": "3.1.0",
+  "description": "Portable Claude Code skill stack — 36 vendored skills for merciless verification, adversarial cross-model review, architecture, code archaeology, engineering principles, writing, and infrastructure, plus a mise/starship/zsh shell setup.",
   "author": {
     "name": "Luis Arvelo",
     "email": "hi@delavalom.com"
@@ -16,7 +16,11 @@
     "engineering-principles",
     "technical-writing",
     "railway",
-    "shell-setup"
+    "shell-setup",
+    "verification",
+    "adversarial-review",
+    "cross-model-review",
+    "tdd"
   ],
   "skills": "./.claude/skills/"
 }
