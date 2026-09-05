@@ -92,6 +92,7 @@ stack_skill_names() {
 MODE="full"
 DRY_RUN=false
 SKIP_SHELL=false
+SKIP_DEPS=false
 PROJECT_TARGET=""
 
 print_help() {
@@ -101,16 +102,20 @@ print_help() {
     echo "  --full             Skills + CLAUDE.md + settings + shell (default)"
     echo "  --skills           Install the skills to ~/.claude/skills/ only"
     echo "  --project [PATH]   Copy the stack into another project's .claude/ directory"
+    echo "  --shell            Shell only: mise + runtimes, starship, zsh plugins, .zshrc"
     echo "  --uninstall        Remove installed skills and the .zshrc source line"
     echo ""
     echo "Options:"
     echo "  --dry-run          Show what would happen without changing anything"
     echo "  --skip-shell       Full install but skip mise/starship/zsh configuration"
+    echo "  --skip-deps        Shell setup without installing mise/brew packages (configs only)"
     echo "  --help, -h         Show this help message"
     echo ""
     echo "Examples:"
     echo "  bash install.sh                          # Full install"
     echo "  bash install.sh --skills                 # Just the skills"
+    echo "  bash install.sh --shell                  # Just the shell: mise, starship, zsh"
+    echo "  bash install.sh --shell --dry-run        # Preview the shell setup"
     echo "  bash install.sh --project /path/to/app   # Copy the stack into another project"
     echo "  bash install.sh --project                # Copy the stack into the current directory"
     echo "  bash install.sh --full --dry-run         # Preview a full install"
@@ -121,6 +126,7 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         --full)      MODE="full"; shift ;;
         --skills)    MODE="skills"; shift ;;
+        --shell)     MODE="shell"; shift ;;
         --project)
             MODE="project"
             shift
@@ -132,6 +138,7 @@ while [[ $# -gt 0 ]]; do
         --uninstall) MODE="uninstall"; shift ;;
         --dry-run)   DRY_RUN=true; shift ;;
         --skip-shell) SKIP_SHELL=true; shift ;;
+        --skip-deps) SKIP_DEPS=true; shift ;;
         --help|-h)   print_help ;;
         *)           die "Unknown option: $1 (use --help for usage)" ;;
     esac
@@ -198,12 +205,16 @@ echo ""
 
 log_step "Checking prerequisites..."
 
-[[ -d "$STACK_SKILLS" ]] || die "Skills not found at ${STACK_SKILLS} -- run this script from the delavalom-stack repo"
-
-if command -v claude &>/dev/null; then
-    log_ok "Claude Code found: $(claude --version 2>/dev/null || echo unknown)"
+if [[ "$MODE" == "shell" ]]; then
+    [[ -d "${SCRIPT_DIR}/shell" ]] || die "shell/ not found at ${SCRIPT_DIR}/shell -- run this script from the delavalom-stack repo"
 else
-    log_warn "Claude Code CLI not found in PATH. Files will still be installed."
+    [[ -d "$STACK_SKILLS" ]] || die "Skills not found at ${STACK_SKILLS} -- run this script from the delavalom-stack repo"
+
+    if command -v claude &>/dev/null; then
+        log_ok "Claude Code found: $(claude --version 2>/dev/null || echo unknown)"
+    else
+        log_warn "Claude Code CLI not found in PATH. Files will still be installed."
+    fi
 fi
 
 # ============================================================
@@ -278,101 +289,19 @@ verify_context() {
 install_shell() {
     log_step "Installing shell configuration..."
 
-    local shell_dir="${SCRIPT_DIR}/shell"
-    if [[ ! -d "$shell_dir" ]]; then
-        log_warn "shell/ directory not found -- skipping shell setup"
+    local setup="${SCRIPT_DIR}/shell/setup.sh"
+    if [[ ! -f "$setup" ]]; then
+        log_warn "shell/setup.sh not found -- skipping shell setup"
         return
     fi
 
-    # mise: single tool manager for all runtimes
-    if command -v mise &>/dev/null || [[ -x "$HOME/.local/bin/mise" ]]; then
-        log_ok "mise already installed: $("$HOME/.local/bin/mise" --version 2>/dev/null || mise --version 2>/dev/null || echo unknown)"
-    else
-        if $DRY_RUN; then
-            log_dry "Would install mise via curl https://mise.run"
-        else
-            log_step "Installing mise (node, python, go, rust, bun, java)..."
-            curl -sSf https://mise.run | sh 2>/dev/null && log_ok "mise installed" \
-                || log_warn "mise install failed -- install manually: curl https://mise.run | sh"
-        fi
-    fi
+    # shell/setup.sh owns the shell logic (mise + runtimes, starship, zsh
+    # plugins, .zshrc). Delegate so there is only one copy of it.
+    local args=()
+    $DRY_RUN && args+=(--dry-run)
+    $SKIP_DEPS && args+=(--skip-deps)
 
-    local mise_toml="${SCRIPT_DIR}/mise.toml"
-    local global_mise="${HOME}/.config/mise/config.toml"
-
-    if [[ -f "$mise_toml" ]]; then
-        if $DRY_RUN; then
-            log_dry "Would copy mise.toml to ${global_mise}"
-        elif [[ ! -f "$global_mise" ]]; then
-            mkdir -p "${HOME}/.config/mise"
-            cp "$mise_toml" "$global_mise"
-            log_ok "mise.toml installed as global config"
-        else
-            log_info "Global mise config already exists (${global_mise})"
-        fi
-
-        local mise_cmd=""
-        [[ -x "$HOME/.local/bin/mise" ]] && mise_cmd="$HOME/.local/bin/mise"
-        command -v mise &>/dev/null && mise_cmd="mise"
-
-        if [[ -n "$mise_cmd" ]]; then
-            if $DRY_RUN; then
-                log_dry "Would run: mise install"
-            else
-                log_step "Installing runtimes via mise..."
-                "$mise_cmd" trust "$mise_toml" 2>/dev/null || true
-                "$mise_cmd" install --yes 2>/dev/null && log_ok "All runtimes installed via mise" \
-                    || log_warn "Some runtimes failed. Run 'mise install' manually after setup."
-            fi
-        fi
-    fi
-
-    # starship prompt
-    local starship_src="${shell_dir}/starship.toml"
-    local starship_dst="${HOME}/.config/starship.toml"
-
-    if [[ -f "$starship_src" ]]; then
-        if $DRY_RUN; then
-            log_dry "Would install starship.toml to ${starship_dst}"
-        else
-            mkdir -p "${HOME}/.config"
-            if [[ -f "$starship_dst" ]] && ! diff -q "$starship_src" "$starship_dst" &>/dev/null; then
-                cp "$starship_dst" "${starship_dst}.bak"
-                log_info "Backed up existing starship.toml"
-            fi
-            cp "$starship_src" "$starship_dst"
-            log_ok "starship.toml installed (gruvbox dark)"
-        fi
-    fi
-
-    # .zshrc source line
-    local zshrc="${HOME}/.zshrc"
-    local marker="# delavalom-stack shell config"
-
-    if [[ -f "$zshrc" ]] && grep -qF "$marker" "$zshrc"; then
-        log_ok ".zshrc already configured"
-    elif $DRY_RUN; then
-        log_dry "Would add source line to ${zshrc}"
-    else
-        {
-            echo ""
-            echo "$marker"
-            echo "source \"${shell_dir}/delavalom.zsh\""
-        } >> "$zshrc"
-        log_ok "Added delavalom.zsh source line to .zshrc"
-    fi
-
-    local missing_deps=()
-    command -v starship &>/dev/null || missing_deps+=(starship)
-    if command -v brew &>/dev/null; then
-        brew list zsh-autosuggestions &>/dev/null || missing_deps+=(zsh-autosuggestions)
-        brew list zsh-syntax-highlighting &>/dev/null || missing_deps+=(zsh-syntax-highlighting)
-    fi
-
-    if [[ ${#missing_deps[@]} -gt 0 ]]; then
-        log_warn "Missing shell deps: ${missing_deps[*]}"
-        log_info "Install with: brew install ${missing_deps[*]}"
-    fi
+    bash "$setup" "${args[@]+"${args[@]}"}" || log_warn "Shell setup exited with errors"
 }
 
 # ============================================================
@@ -427,6 +356,9 @@ case "$MODE" in
     skills)
         install_skills
         ;;
+    shell)
+        install_shell
+        ;;
     project)
         do_project_install
         ;;
@@ -441,7 +373,7 @@ echo -e "${PURPLE}  +===================================================+${NC}"
 echo -e "${PURPLE}  |                  INSTALL SUMMARY                  |${NC}"
 echo -e "${PURPLE}  +===================================================+${NC}"
 echo ""
-echo -e "  ${BOLD}Skills:${NC}  ${INSTALLED_SKILLS}"
+[[ "$MODE" != "shell" ]] && echo -e "  ${BOLD}Skills:${NC}  ${INSTALLED_SKILLS}"
 echo -e "  ${BOLD}Mode:${NC}    ${MODE}"
 $DRY_RUN && echo -e "  ${YELLOW}(dry run -- nothing was changed)${NC}"
 echo ""
@@ -449,7 +381,7 @@ echo ""
 if [[ "$MODE" == "full" || "$MODE" == "skills" ]]; then
     log_info "Restart Claude Code (or run /doctor) to pick up the new skills."
 fi
-if [[ "$MODE" == "full" ]] && ! $SKIP_SHELL; then
+if [[ "$MODE" == "shell" ]] || { [[ "$MODE" == "full" ]] && ! $SKIP_SHELL; }; then
     log_info "Run 'exec zsh' to load the shell configuration."
 fi
 echo ""

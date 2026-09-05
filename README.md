@@ -80,6 +80,8 @@ The merciless-verification core. `run-loop` is the one that runs constantly; the
 ```bash
 bash install.sh                          # Full: skills + context + shell (default)
 bash install.sh --skills                 # Skills only, to ~/.claude/skills/
+bash install.sh --shell                  # Shell only: mise + runtimes, starship, zsh plugins
+bash install.sh --shell --skip-deps      # Shell configs only, install no packages
 bash install.sh --project /path/to/app   # Copy the stack into another project
 bash install.sh --project                # Copy the stack into the current directory
 bash install.sh --full --skip-shell      # Full install, no shell configuration
