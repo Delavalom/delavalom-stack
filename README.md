@@ -75,6 +75,28 @@ The merciless-verification core. `run-loop` is the one that runs constantly; the
 | `use-railway` | Railway projects, services, deployments, environments, troubleshooting |
 | `diagram-design` | Branded architecture, flow, and data diagrams as standalone HTML/SVG/PNG |
 
+### Demo & launch videos
+
+Turn code and a live app into a shareable video. `brag` or `app-demo-video` drives the run; the rest are the tools they call.
+
+| Skill | What it does |
+|-------|--------------|
+| `brag` / `brag-slim` | Launch video from a project or URL: angle, storyboard, music, poster, share copy. On Opus 5.5 `brag` hands off to `brag-slim` |
+| `app-demo-video` | Record the real app as 1080p footage (Playwright + Chrome screencast, injected cursor), then cut it into a time-driven composition with push-ins, captions, synced SFX and music |
+| `product-launch-video` | Narrated marketing video from a site or product URL |
+| `pr-to-video` | Explain a pull request as a short video |
+| `general-video` / `faceless-explainer` | Custom and explainer videos without product capture |
+| `motion-graphics` | Short, unnarrated motion pieces: kinetic type, stats, logo stings, lower thirds |
+| `music-to-video` / `talking-head-recut` / `embedded-captions` | Beat-synced edits, overlays on talking-head footage, burned-in captions |
+| `slideshow` | Presentation and pitch decks rendered as video |
+| `hyperframes` + `hyperframes-core`, `-animation`, `-keyframes`, `-creative`, `-audio`, `-cli`, `-registry`, `-studio` | HTML-to-video engine: composition contract, motion, camera moves, mixing, lint/check/render |
+| `remotion-to-hyperframes` | Port an existing Remotion project |
+| `motion-design` | Timing, easing and choreography rules for any animation |
+| `media-use` | Source or generate images, icons, music, voice and captions |
+| `gsap-*` | GSAP timelines, plugins and performance |
+
+The flow that made the ToolDB launch video: `brag-slim` for the story → `app-demo-video` to record and cut real footage → `motion-design` for timing → share copy written in your voice through the Kleo MCP (`claude mcp add --scope user --transport http kleo https://app.kleo.so/api/mcp/mcp`).
+
 ## Installation Modes
 
 ```bash
