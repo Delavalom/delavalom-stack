@@ -8,3 +8,6 @@ node_modules/
 *~
 .claude.bak.*/
 .claude/settings.local.json
+
+# Music in brag has no confirmed redistribution license; the full copy lives in the private skills repo.
+.claude/skills/brag/assets/music/*.mp3

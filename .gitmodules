@@ -1,0 +1,3 @@
+[submodule ".claude/skills/no-use-effect"]
+	path = .claude/skills/no-use-effect
+	url = https://github.com/alejandrobailo/no-use-effect.git
