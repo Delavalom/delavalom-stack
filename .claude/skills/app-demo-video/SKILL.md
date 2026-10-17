@@ -41,7 +41,7 @@ Build one `video.html` (1920×1080) that exposes `window.render(t)` and `window.
 What made the ToolDB launch video work:
 - **Story:** hook (the pain, typed as a prompt), problem cards, the "before" (a mock of the old tool, e.g. a Notion table that finds nothing), the reveal (logo plus one real number), real footage, the killer feature, then an outro with the URL. Fit it in 45 to 60 seconds.
 - **Camera on footage:** slow push-ins (`scale` 1 to 1.14 with ease-in-out over about 1.5s) toward whatever the viewer should read, then release. Never cut mid-type.
-- **Captions** over footage instead of voiceover: one short line at a time, about 0.3 seconds per word on screen.
+- **Captions** over footage instead of voiceover: one short line at a time, about 0.3 seconds per word on screen. Each line should make the viewer want the next one. If the `content-principles` skill is installed, load it before writing the hook and captions.
 - **Mock scenes** (a terminal, the old tool) built in HTML with real names and data. Say in the report that they're mocks.
 - **Motion:** one signature ease (ease-out-quart for entrances), staggers under 500ms, crossfades of 0.3 to 0.35 seconds between scenes. Follow /motion-design.
 

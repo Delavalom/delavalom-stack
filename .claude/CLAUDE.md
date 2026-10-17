@@ -8,7 +8,9 @@ Luis prefers thorough, structured work with clear reasoning behind every decisio
 
 ## What This Repo Is
 
-A portable skill set. The 36 skills in `.claude/skills/` are the vendored copy of Luis's global `~/.claude/skills/` (minus the Clerk skills, which come from `~/.agents/`), plus the verification core and the `pstack` skills the others reference. `install.sh` copies them back to `~/.claude/skills/`, into another project, or sets up the shell.
+A portable skill set for Claude Code. The 39 skills in `.claude/skills/` are real files: Luis's own skills from `~/.claude/skills/`, plus the verification core and the `pstack` skills the others reference. Third-party skills (HyperFrames, GSAP, Clerk, Three.js) are not vendored. `install.sh` copies the skills to `~/.claude/skills/`, into another project, or sets up the shell. `scripts/export-skills.sh` pulls edits from `~/.claude/skills/` back into the repo.
+
+Never commit a symlink under `.claude/skills/`: it points at one machine's paths and is empty in every clone.
 
 Everything else — sub-agents, hooks, MCP servers, agent teams, external plugin cloning — was removed in v3.0.0. Plugins are managed through the Claude Code marketplace (`claude plugin install`), not through this repo.
 
@@ -57,6 +59,10 @@ The merciless-verification core. Reviewers must not share context or a model fam
 - **clone-webapp** — clone a live web app's frontend into a Next.js + Tailwind copy
 - **use-railway** — Railway projects, services, deployments, environments, and troubleshooting
 - **diagram-design** — branded architecture, flow, and data diagrams as standalone HTML/SVG/PNG
+
+### Demo & launch videos
+- **brag** / **brag-slim** — launch video from a project or URL: angle, storyboard, music, share copy
+- **app-demo-video** — record the real app as 1080p footage and cut it into a demo or launch video
 
 ## Workflow: The Delavalom Pipeline
 
