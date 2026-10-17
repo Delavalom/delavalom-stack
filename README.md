@@ -1,6 +1,8 @@
 # Delavalom Stack — Portable Claude Code Skill Set
 
-The 36 skills I actually use, vendored into one repo so they install anywhere with one command. Plus a mise/starship/zsh shell setup.
+The 39 skills of my own (and a few I depend on), vendored as real files so they install anywhere with one command. Plus a mise/starship/zsh shell setup.
+
+Claude Code is the target: `install.sh` writes real folders into `~/.claude/skills/`, never symlinks.
 
 ## Quick Start
 
@@ -77,7 +79,7 @@ The merciless-verification core. `run-loop` is the one that runs constantly; the
 
 ### Demo & launch videos
 
-Turn code and a live app into a shareable video. `brag` or `app-demo-video` drives the run; the rest are the tools they call.
+Turn code and a live app into a shareable video. `brag` or `app-demo-video` drives the run; the rest are the tools they call. Only `brag`, `brag-slim` and `app-demo-video` ship here. Install the others from upstream (see [Third-party skills](#third-party-skills)).
 
 | Skill | What it does |
 |-------|--------------|
@@ -133,7 +135,29 @@ claude plugin install expo@claude-plugins-official
 
 Marketplace plugins auto-update. Git clones freeze at the commit you cloned.
 
-Clerk skills are deliberately excluded — they live in `~/.agents/skills/` and are symlinked into `~/.claude/skills/` by Clerk's own tooling.
+### Third-party skills
+
+Skills written by others are not vendored. Install them straight into Claude's folder as copies:
+
+```bash
+npx skills add heygen-com/hyperframes -g -a claude-code --copy -y   # hyperframes, video workflows
+npx skills add greensock/gsap-skills -g -a claude-code --copy -y    # gsap-*
+npx skills add LottieFiles/motion-design-skill -g -a claude-code --copy -y
+npx skills add clerk/skills -g -a claude-code --copy -y
+```
+
+Update them the same way (`add` again). Never run `npx skills update`: it ignores `--copy`, moves the skill into `~/.agents/skills/`, turns the folder in `~/.claude/skills/` into a symlink and deletes local edits.
+
+`brag` ships without its music (`assets/music/*.mp3`, from ende.app), because the redistribution terms aren't confirmed. It runs without music, and `install.sh` never deletes tracks you added yourself.
+
+## Editing skills
+
+Edit the live copy in `~/.claude/skills/<name>`, then pull the change back into this repo and commit:
+
+```bash
+scripts/export-skills.sh   # refreshes every vendored skill from ~/.claude/skills
+git diff
+```
 
 ## The Delavalom Pipeline
 
@@ -171,6 +195,8 @@ Most skills here are mine. These are vendored from [cursor/plugins](https://gith
 They were copied because skills already in this repo referenced them by name and the references were dangling. A few still mention Cursor-specific paths (`~/.cursor/rules/pstack-models.mdc`, `.cursor/skills/`); they degrade to their documented defaults when those files are absent.
 
 `run-loop`, `adversarial-review`, `harden-the-loop`, and `principle-no-cope` are original to this repo.
+
+`no-use-effect` is a git submodule of [alejandrobailo/no-use-effect](https://github.com/alejandrobailo/no-use-effect). The sound effects in `brag/assets/sfx` are from [Kenney](https://kenney.nl/) (CC0).
 
 ## License
 

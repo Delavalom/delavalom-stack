@@ -68,11 +68,15 @@ copy_tree() {
         log_dry "copy tree $src -> $dst"
         return
     fi
-    rm -rf "$dst"
-    mkdir -p "$dst"
+    # An old install may have left a symlink here; replace it instead of writing through it.
+    [[ -L "$dst" ]] && rm "$dst"
     if command -v rsync &>/dev/null; then
-        rsync -a --exclude '.git' --exclude '.DS_Store' "${src}/" "${dst}/"
+        # --delete leaves excluded files alone, so brag's local music (not shipped here) survives.
+        mkdir -p "$dst"
+        rsync -a --delete --exclude '.git' --exclude '.DS_Store' --exclude '/assets/music/*.mp3' "${src}/" "${dst}/"
     else
+        rm -rf "$dst"
+        mkdir -p "$dst"
         (cd "$src" && tar -cf - --exclude '.git' --exclude '.DS_Store' .) | (cd "$dst" && tar -xf -)
     fi
 }
@@ -210,6 +214,11 @@ if [[ "$MODE" == "shell" ]]; then
 else
     [[ -d "$STACK_SKILLS" ]] || die "Skills not found at ${STACK_SKILLS} -- run this script from the delavalom-stack repo"
 
+    # no-use-effect is a submodule; without this it has no SKILL.md and is silently skipped.
+    if [[ -f "${SCRIPT_DIR}/.gitmodules" ]] && ! $DRY_RUN; then
+        git -C "$SCRIPT_DIR" submodule update --init --recursive --quiet || log_warn "git submodule update failed"
+    fi
+
     if command -v claude &>/dev/null; then
         log_ok "Claude Code found: $(claude --version 2>/dev/null || echo unknown)"
     else
@@ -233,7 +242,7 @@ install_skills() {
 
         # Back up anything already there that isn't identical to what we ship.
         if [[ -e "$dst" || -L "$dst" ]]; then
-            if [[ -d "$dst" && ! -L "$dst" ]] && diff -rq "${STACK_SKILLS}/${name}" "$dst" &>/dev/null; then
+            if [[ -d "$dst" && ! -L "$dst" ]] && diff -rq -x '*.mp3' -x '.git' "${STACK_SKILLS}/${name}" "$dst" &>/dev/null; then
                 : # already identical, nothing to preserve
             else
                 if [[ -z "$backup_dir" ]]; then
