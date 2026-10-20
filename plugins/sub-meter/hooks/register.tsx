@@ -11,6 +11,7 @@ const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const POLL_MS = 5 * 60_000
 const LABELS: Record<string, string> = { five_hour: '5h', seven_day: 'week', spend_limit: 'budget' }
 const BAR = 10
+const WARN_AT = [75, 90]
 // ponytail: fixed breakpoints on terminal width, not a measure of the footer's free room; measure if it clips.
 const FULL_COLUMNS = 100
 const SHORT_COLUMNS = 70
@@ -43,7 +44,14 @@ async function seatBudget ($: EngineInterface): Promise<Reading | null> {
   }
 }
 
+/** Keeps the new reading, with a toast the first time it climbs past a WARN_AT line. */
 async function save ($: EngineInterface, next: Reading) {
+  const before = (await read($, reading))?.percent ?? 0
+  const crossed = WARN_AT.filter(line => before < line && next.percent >= line).at(-1)
+  if (crossed !== undefined) {
+    const left = next.resetsAt === undefined ? 0 : Date.parse(next.resetsAt) - (await $.clock.now())
+    $.ui.toast(`${next.label} ${Math.round(next.percent)}% used${left > 0 ? ` · resets ${countdown(left)}` : ''}`, { timeoutMs: 15_000 })
+  }
   await update($, reading, () => next)
   await $.store.set('reading', next)
 }

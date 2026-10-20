@@ -10,7 +10,7 @@ A Claude Code mod that shows how much of your usage is left, at the bottom right
 - **Pro or Max subscription:** whichever window is closest to its limit, the 5-hour or the weekly one.
 - **API key or third-party provider:** nothing to show; the footer stays as it is.
 
-The bar turns yellow at 75% and red at 90%. Below 100 columns the bar and reset time drop; below 70 the meter hides.
+The bar turns yellow at 75% and red at 90%, and a toast warns you the first time usage climbs past each line (`budget 91% used · resets 11d`). Below 100 columns the bar and reset time drop; below 70 the meter hides.
 
 ## Install
 

@@ -19,6 +19,11 @@ function engine (on: On, rateLimits: SessionRateLimit[], account: object | null 
   const clock = mock.clock(on, { now: NOW })
   const store: Record<string, unknown> = {}
   const requests: string[] = []
+  const toasts: string[] = []
+  on('ui.toast', ($, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
   on('store.get', ($, e) => ({ value: store[e.key] }))
   on('store.set', ($, e) => {
     store[e.key] = JSON.parse(JSON.stringify(e.value))
@@ -36,7 +41,7 @@ function engine (on: On, rateLimits: SessionRateLimit[], account: object | null 
     const { Box } = $.ui.resolve(e)
     return e.props.modes.length > 0 ? <Box key="modes" /> : ({ type: 'engine', ref: 0 } as const)
   })
-  return { clock, store, requests }
+  return { clock, store, requests, toasts }
 }
 
 const start = ($: Engine) => $.session.start({ cwd: '/p', surface: 'terminal', isInteractive: true })
@@ -108,3 +113,26 @@ for (const [name, account] of [['is off', { extra_usage: { is_enabled: false } }
     expect(await texts($)).toEqual([])
   })
 }
+
+test('warns once as usage climbs past 75% and again past 90%', async ($, on) => {
+  const w = engine(on, [{ kind: 'seven_day', percentUsed: 60, resetsAt: later(50 * HOUR) }])
+  await start($)
+  expect(w.toasts).toEqual([])
+  await measure($, [{ kind: 'seven_day', percentUsed: 76, resetsAt: later(50 * HOUR) }])
+  await measure($, [{ kind: 'seven_day', percentUsed: 80, resetsAt: later(50 * HOUR) }])
+  await measure($, [{ kind: 'seven_day', percentUsed: 91, resetsAt: later(50 * HOUR) }])
+  expect(w.toasts).toEqual(['week 76% used · resets 2d', 'week 91% used · resets 2d'])
+})
+
+test('a reading already past the line at the next start does not warn again', async ($, on) => {
+  const w = engine(on, [], { extra_usage: { is_enabled: true, utilization: 80 } })
+  w.store.reading = { label: 'budget', percent: 78, resetsAt: '2026-11-01T00:00:00.000Z' }
+  await start($)
+  expect(w.toasts).toEqual([])
+})
+
+test('a jump straight past 90% warns once, at 90', async ($, on) => {
+  const w = engine(on, [], { extra_usage: { is_enabled: true, utilization: 95 } })
+  await start($)
+  expect(w.toasts).toEqual(['budget 95% used · resets 19d'])
+})

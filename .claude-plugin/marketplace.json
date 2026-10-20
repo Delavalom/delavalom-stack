@@ -18,7 +18,7 @@
       "name": "sub-meter",
       "source": "./plugins/sub-meter",
       "description": "Usage meter in the prompt footer: an Enterprise or Team seat's monthly budget, or a subscription's tightest rate-limit window.",
-      "version": "1.0.0"
+      "version": "1.1.0"
     }
   ]
 }
