@@ -1,20 +1,24 @@
-// Mod tests, run against the engine itself: `claude plugin test .`
+// Run against the engine: `claude plugin test .`
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On, SessionRateLimit } from 'claude-code'
 
 const NOW = Date.parse('2026-10-12T10:00:00Z')
-const at = (ms: number) => new Date(NOW + ms).toISOString()
 const HOUR = 3_600_000
-const LIMITS: SessionRateLimit[] = [
-  { kind: 'five_hour', percentUsed: 58, resetsAt: at(2 * HOUR + 10 * 60_000) },
-  { kind: 'seven_day', percentUsed: 23.5, resetsAt: at(76 * HOUR) }
-]
+const later = (ms: number) => new Date(NOW + ms).toISOString()
 
-/** Everything beneath the mod: the clock, the store, the session's usage and what the engine draws. */
-function world (on: On, rateLimits: SessionRateLimit[] = LIMITS, account: object | null = { extra_usage: null }) {
+const SUBSCRIPTION: SessionRateLimit[] = [
+  { kind: 'five_hour', percentUsed: 40, resetsAt: later(3 * HOUR) },
+  { kind: 'seven_day', percentUsed: 82, resetsAt: later(50 * HOUR) }
+]
+// An Enterprise seat's usage, as /api/oauth/usage answers it: no windows, a monthly budget.
+const SEAT = { five_hour: null, seven_day: null, extra_usage: { is_enabled: true, monthly_limit: 55000, used_credits: 17288, utilization: 31.43, currency: 'USD' } }
+
+/** The engine beneath the plugin. `account` is what the usage endpoint returns; null fails the request. */
+function engine (on: On, rateLimits: SessionRateLimit[], account: object | null = { extra_usage: null }) {
   const clock = mock.clock(on, { now: NOW })
   const store: Record<string, unknown> = {}
+  const requests: string[] = []
   on('store.get', ($, e) => ({ value: store[e.key] }))
   on('store.set', ($, e) => {
     store[e.key] = JSON.parse(JSON.stringify(e.value))
@@ -23,277 +27,84 @@ function world (on: On, rateLimits: SessionRateLimit[] = LIMITS, account: object
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.usage', () => ({ value: { startedAt: NOW, context: { window: 200_000 }, rateLimits } as never }))
   on('session.measure', ($, e) => ({ changed: e.changed }))
-  // The account's usage, as /api/oauth/usage answers it for the session's login.
-  const fetched: string[] = []
   on('session.authorize', () => ({ value: { handle: 'h', kind: 'bearer' } }))
   on('http.fetch', ($, e) => {
-    fetched.push(e.url)
-    return { value: account === null ? { status: 500, ok: false, headers: {}, text: 'oops' } : { status: 200, ok: true, headers: {}, text: JSON.stringify(account) } }
+    requests.push(e.url)
+    return { value: account === null ? { status: 500, ok: false, headers: {}, text: '' } : { status: 200, ok: true, headers: {}, text: JSON.stringify(account) } }
   })
-  // The engine's own node, as core answers it; with mode labels, a Box the tests find.
   on('ui.render', ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
-    if ('hint' in e.props) return <Text>{e.props.hint}</Text>
-    return e.props.modes.length > 0 ? <Box key="engine" /> : ({ type: 'engine', ref: 0 } as const)
+    const { Box } = $.ui.resolve(e)
+    return e.props.modes.length > 0 ? <Box key="modes" /> : ({ type: 'engine', ref: 0 } as const)
   })
-  return { clock, store, fetched }
+  return { clock, store, requests }
 }
 
-const startSession = ($: Engine) => $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
-const footer = ($: Engine, modes: string[] = [], columns?: number) =>
-  $.ui.mount({ plugin: 'sub-meter', surface: 'terminal', component: 'SessionMode', props: { modes }, viewport: columns === undefined ? undefined : { columns, rows: 30 } })
-const hint = ($: Engine, text: string) =>
-  $.ui.mount({ plugin: 'sub-meter', surface: 'terminal', component: 'PromptHint', props: { isDraft: false, isWorking: false, hint: text } })
+const start = ($: Engine) => $.session.start({ cwd: '/p', surface: 'terminal', isInteractive: true })
+const measure = ($: Engine, rateLimits: SessionRateLimit[] = []) =>
+  $.session.measure({ context: { window: 200_000 }, rateLimits, changed: ['rateLimits'] } as never)
+const texts = async ($: Engine, columns = 120, modes: string[] = []) => {
+  const ui = await $.ui.mount({ plugin: 'sub-meter', surface: 'terminal', component: 'SessionMode', props: { modes }, viewport: { columns, rows: 30 } })
+  return (await ui.findAll({ type: 'Text' })).map(text => text.text)
+}
 
-test('shows the 5-hour window first, as a bar with the time until it resets', async ($, on) => {
-  world(on)
-  await startSession($)
-  const ui = await footer($)
-  expect(await ui.find({ type: 'Text', text: '5h' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' ━━━━━━' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: '────' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' 58%' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' ↻ 2h 10m' })).toBeDefined()
-})
-
-test('takes turns with the weekly window', async ($, on) => {
-  const w = world(on)
-  await startSession($)
-  await w.clock.advance(8000)
-  const ui = await footer($)
-  expect(await ui.find({ type: 'Text', text: 'week' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' 24%' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' ↻ 3d 4h' })).toBeDefined()
-})
-
-test('takes turns as often as rotateSeconds says', { options: { rotateSeconds: 30 } }, async ($, on) => {
-  const w = world(on)
-  await startSession($)
-  await w.clock.advance(8000)
-  expect(await (await footer($)).find({ type: 'Text', text: '5h' })).toBeDefined()
-  await w.clock.advance(22_000)
-  expect(await (await footer($)).find({ type: 'Text', text: 'week' })).toBeDefined()
-})
-
-test('alone, with no mode labels, the meter ends the footer', async ($, on) => {
-  world(on)
-  await startSession($)
-  const ui = await footer($)
-  expect((await ui.findAll({ type: 'Text' })).at(-1)?.text).toBe(' ↻ 2h 10m')
-})
-
-test("keeps the engine's mode labels after the meter", async ($, on) => {
-  world(on)
-  await startSession($)
-  const ui = await footer($, ['focus'])
-  const row = await ui.drawn()
-  expect(row.children?.at(-1)).toMatchObject({ props: { key: 'engine' } })
-  expect((await ui.findAll({ type: 'Text' })).map(text => text.text)).toEqual(['5h', ' ━━━━━━', '────', ' 58%', ' ↻ 2h 10m', ' · '])
-})
-
-test("keeps another plugin's drawing there after the meter, so it stays last", async ($, on) => {
-  // Beneath the meter: another plugin's switch, where the engine has no labels to draw.
-  on('ui.render', { component: 'SessionMode' }, ($, e) => {
-    const { Text } = $.ui.resolve(e)
-    return <Text>{'⏵ narrator on'}</Text>
-  })
-  world(on)
-  await startSession($)
-  const ui = await footer($)
-  expect((await ui.findAll({ type: 'Text' })).map(text => text.text).slice(-3)).toEqual([' ↻ 2h 10m', ' · ', '⏵ narrator on'])
-})
-
-test('off a subscription the engine draws its own footer', async ($, on) => {
-  world(on, [])
-  await startSession($)
-  const ui = await footer($, ['focus'])
-  expect(await ui.find({ key: 'engine' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: '5h' })).toBeUndefined()
-})
-
-test('a new measurement shows at once and is kept for the next session', async ($, on) => {
-  const w = world(on, [])
-  await startSession($)
-  await $.session.measure({ context: { window: 200_000 }, rateLimits: [{ ...LIMITS[0], percentUsed: 91 }], changed: ['rateLimits'] } as never)
-  const ui = await footer($)
-  const used = await ui.find({ type: 'Text', text: ' ━━━━━━━━━' })
-  expect(used?.props.color).toBe('error')
-  expect(w.store.limits).toEqual([{ ...LIMITS[0], percentUsed: 91 }])
-})
-
-test('on a spend limit alone it shows the budget', async ($, on) => {
-  world(on, [{ kind: 'spend_limit', percentUsed: 42, resetsAt: at(12 * 24 * HOUR) }])
-  await startSession($)
-  const ui = await footer($)
-  expect(await ui.find({ type: 'Text', text: 'budget' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' ━━━━' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' 42%' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' ↻ 12d 0h' })).toBeDefined()
-})
-
-test('a spend limit past 100 shows its percent over a full red bar', async ($, on) => {
-  world(on, [{ kind: 'spend_limit', percentUsed: 112.5 }])
-  await startSession($)
-  const ui = await footer($)
-  const used = await ui.find({ type: 'Text', text: ' ━━━━━━━━━━' })
-  expect(used?.props.color).toBe('error')
-  expect(await ui.find({ type: 'Text', text: ' 113%' })).toBeDefined()
-})
-
-test('takes turns with the budget after the 5-hour and weekly windows', async ($, on) => {
-  const w = world(on, [...LIMITS, { kind: 'spend_limit', percentUsed: 30 }])
-  await startSession($)
-  await w.clock.advance(16000)
-  const ui = await footer($)
-  expect(await ui.find({ type: 'Text', text: 'budget' })).toBeDefined()
-})
-
-test('a window past its reset shows as empty', async ($, on) => {
-  const w = world(on)
-  await startSession($)
-  await w.clock.set(NOW + 3 * HOUR)
-  const ui = await footer($)
-  expect(await ui.find({ type: 'Text', text: ' 0%' })).toBeDefined()
-})
-
-test('drops the cycle hint from the line after the mode', async ($, on) => {
-  world(on)
-  const ui = await hint($, '(shift+tab to cycle) · ← for agents')
-  expect(await ui.find({ type: 'Text', text: '← for agents' })).toBeDefined()
-})
-
-test('keeps what is around the cycle hint, without empty parts', { options: { hideInterruptHint: false } }, async ($, on) => {
-  world(on)
-  const ui = await hint($, 'esc to interrupt (shift+tab to cycle) ·  · ctrl+t to hide tasks')
-  expect(await ui.find({ type: 'Text', text: 'esc to interrupt · ctrl+t to hide tasks' })).toBeDefined()
-})
-
-test('drops "esc to interrupt" while Claude works', async ($, on) => {
-  world(on)
-  const ui = await hint($, 'esc to interrupt (shift+tab to cycle) ·  · ctrl+t to hide tasks')
-  expect(await ui.find({ type: 'Text', text: 'ctrl+t to hide tasks' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /esc to interrupt/ })).toBeUndefined()
-})
-
-test('keeps the hints when told to', { options: { hideCycleHint: false, hideInterruptHint: false } }, async ($, on) => {
-  world(on)
-  const ui = await hint($, 'esc to interrupt (shift+tab to cycle)')
-  expect(await ui.find({ type: 'Text', text: 'esc to interrupt (shift+tab to cycle)' })).toBeDefined()
-})
-
-test('leaves every other hint as it is', async ($, on) => {
-  world(on)
-  const ui = await hint($, '? for shortcuts')
-  expect(await ui.find({ type: 'Text', text: '? for shortcuts' })).toBeDefined()
-})
-
-// The footer's row at 56 columns leaves the meter its 26: 4 of padding, 2 between, 20 for the mode
-// label, and 4 for a plugin that may wrap it.
-const texts = async (ui: { findAll: (query: { type: 'Text' }) => Promise<{ text?: string }[]> }) => (await ui.findAll({ type: 'Text' })).map(text => text.text)
-
-test('where the row is short the meter gives up its bar, then the reset time, then itself', async ($, on) => {
-  world(on)
-  await startSession($)
-  expect(await texts(await footer($, [], 56))).toEqual(['5h', ' ━━━━━━', '────', ' 58%', ' ↻ 2h 10m'])
-  expect(await texts(await footer($, [], 55))).toEqual(['5h', ' 58%', ' ↻ 2h 10m'])
-  expect(await texts(await footer($, [], 44))).toEqual(['5h', ' 58%'])
-  const none = await footer($, [], 35)
-  expect(await none.find({ type: 'Text', text: '5h' })).toBeUndefined()
-})
-
-test('the hint beside the mode label takes its room from the meter', async ($, on) => {
-  world(on)
-  await startSession($)
-  await hint($, '? for shortcuts')
-  expect(await texts(await footer($, [], 72))).toEqual(['5h', ' ━━━━━━', '────', ' 58%', ' ↻ 2h 10m'])
-  expect(await texts(await footer($, [], 71))).toEqual(['5h', ' 58%', ' ↻ 2h 10m'])
-})
-
-test("another plugin's switch beneath keeps its room: the meter shrinks first", { plugins: [{
-  name: 'switch',
-  register (on) {
-    on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
-      await next(e)
-      const { Text } = $.ui.resolve(e)
-      return <Text>{'⏵ narrator on'}</Text>
-    })
-  }
-}] }, async ($, on) => {
-  world(on)
-  await startSession($)
-  expect(await texts(await footer($, [], 68))).toEqual(['5h', ' ━━━━━━', '────', ' 58%', ' ↻ 2h 10m', ' · ', '⏵ narrator on'])
-  expect(await texts(await footer($, [], 67))).toEqual(['5h', ' 58%', ' ↻ 2h 10m', ' · ', '⏵ narrator on'])
-  expect(await texts(await footer($, [], 47))).toEqual(['⏵ narrator on'])
-})
-
-test('what a switch beneath gives up is not taken back: the meter only shrinks as the row does', { plugins: [{
-  name: 'switch',
-  register (on) {
-    on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
-      await next(e)
-      const { Text } = $.ui.resolve(e)
-      return <Text>{'⏵'}</Text>
-    })
-  }
-}] }, async ($, on) => {
-  world(on)
-  await startSession($)
-  expect(await texts(await footer($, [], 54))).toEqual(['5h', ' 58%', ' ↻ 2h 10m', ' · ', '⏵'])
-  expect(await texts(await footer($, [], 53))).toEqual(['5h', ' 58%', ' · ', '⏵'])
-  expect(await texts(await footer($, [], 36))).toEqual(['5h', ' 58%', ' · ', '⏵'])
-  expect(await texts(await footer($, [], 35))).toEqual(['⏵'])
-})
-
-test('off the terminal the meter is drawn whole', async ($, on) => {
-  world(on)
-  await startSession($)
-  const ui = await $.ui.mount({ plugin: 'sub-meter', surface: 'desktop', component: 'SessionMode', props: { modes: [] }, viewport: { columns: 30, rows: 30 } })
-  expect(await ui.find({ type: 'Text', text: ' ━━━━━━' })).toBeDefined()
-})
-
-// An Enterprise seat: no rate-limit windows, a monthly budget in the account's usage.
-const SEAT = { five_hour: null, seven_day: null, extra_usage: { is_enabled: true, monthly_limit: 55000, used_credits: 17288, utilization: 31.43, currency: 'USD' } }
-
-test("on a seat with a monthly budget and no windows it shows the budget, resetting on the 1st", async ($, on) => {
-  const w = world(on, [], SEAT)
-  await startSession($)
-  const ui = await footer($)
-  expect(w.fetched).toEqual(['https://api.anthropic.com/api/oauth/usage'])
-  expect(await ui.find({ type: 'Text', text: 'budget' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' 31%' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' ↻ 19d 14h' })).toBeDefined()
-  expect(w.store.limits).toEqual([{ kind: 'spend_limit', percentUsed: 31.4, resetsAt: '2026-11-01T00:00:00.000Z' }])
+test("shows an Enterprise seat's monthly budget, resetting on the 1st", async ($, on) => {
+  const w = engine(on, [], SEAT)
+  await start($)
+  expect(w.requests).toEqual(['https://api.anthropic.com/api/oauth/usage'])
+  expect(await texts($)).toEqual(['budget ', '███', '░░░░░░░ ', '31%', ' · resets 19d'])
+  expect(w.store.reading).toEqual({ label: 'budget', percent: 31.4, resetsAt: '2026-11-01T00:00:00.000Z' })
 })
 
 test('asks for the budget at most every five minutes', async ($, on) => {
-  const w = world(on, [], SEAT)
-  await startSession($)
-  const measure = () => $.session.measure({ context: { window: 200_000 }, rateLimits: [], changed: ['cost'] } as never)
-  await measure()
-  expect(w.fetched.length).toBe(1)
+  const w = engine(on, [], SEAT)
+  await start($)
+  await measure($)
+  expect(w.requests.length).toBe(1)
   await w.clock.advance(5 * 60_000)
-  await measure()
-  expect(w.fetched.length).toBe(2)
+  await measure($)
+  expect(w.requests.length).toBe(2)
 })
 
-test('on a subscription it never asks for the budget', async ($, on) => {
-  const w = world(on, LIMITS, SEAT)
-  await startSession($)
-  expect(w.fetched).toEqual([])
+test("on a subscription it shows the tightest window and never asks for a budget", async ($, on) => {
+  const w = engine(on, SUBSCRIPTION, SEAT)
+  await start($)
+  expect(w.requests).toEqual([])
+  expect(await texts($)).toEqual(['week ', '████████', '░░ ', '82%', ' · resets 2d'])
 })
 
-for (const [name, extra] of [['turned off', { is_enabled: false }], ['with no limit', { is_enabled: true, utilization: null }]] as const) {
-  test(`a budget ${name} leaves the footer as it is`, async ($, on) => {
-    world(on, [], { extra_usage: extra })
-    await startSession($)
-    expect(await (await footer($, ['focus'])).find({ type: 'Text', text: 'budget' })).toBeUndefined()
+test('a new measurement replaces the reading and turns red from 90%', async ($, on) => {
+  engine(on, SUBSCRIPTION)
+  await start($)
+  await measure($, [{ kind: 'five_hour', percentUsed: 93, resetsAt: later(HOUR) }])
+  const ui = await $.ui.mount({ plugin: 'sub-meter', surface: 'terminal', component: 'SessionMode', props: { modes: [] }, viewport: { columns: 120, rows: 30 } })
+  expect((await ui.find({ type: 'Text', text: '93%' }))?.props.color).toBe('error')
+})
+
+test('the last reading shows at the next start before anything is measured', async ($, on) => {
+  const w = engine(on, [], null)
+  w.store.reading = { label: 'budget', percent: 50, resetsAt: '2026-11-01T00:00:00.000Z' }
+  await start($)
+  expect(await texts($)).toContain('50%')
+})
+
+test('a narrow terminal drops the bar and reset, a very narrow one the meter', async ($, on) => {
+  engine(on, [], SEAT)
+  await start($)
+  expect(await texts($, 80)).toEqual(['budget ', '31%'])
+  expect(await texts($, 60)).toEqual([])
+})
+
+test("keeps the engine's mode labels after the meter", async ($, on) => {
+  engine(on, [], SEAT)
+  await start($)
+  const ui = await $.ui.mount({ plugin: 'sub-meter', surface: 'terminal', component: 'SessionMode', props: { modes: ['focus'] }, viewport: { columns: 120, rows: 30 } })
+  expect((await ui.drawn()).children?.at(-1)).toMatchObject({ props: { key: 'modes' } })
+})
+
+for (const [name, account] of [['is off', { extra_usage: { is_enabled: false } }], ['has no limit', { extra_usage: { is_enabled: true, utilization: null } }], ['request fails', null]] as const) {
+  test(`shows nothing when the budget ${name}`, async ($, on) => {
+    engine(on, [], account)
+    await start($)
+    expect(await texts($)).toEqual([])
   })
 }
-
-test('a failed request leaves the footer as it is', async ($, on) => {
-  world(on, [], null)
-  await startSession($)
-  const ui = await footer($, ['focus'])
-  expect(await ui.find({ key: 'engine' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: 'budget' })).toBeUndefined()
-})

@@ -1,8 +1,8 @@
-/** One rate-limit window of the subscription, as the last API response reported it. */
-export type Limit = { kind: string; percentUsed: number; resetsAt?: string }
+/** What the meter shows: one usage figure against its limit. */
+export type Reading = { label: string; percent: number; resetsAt?: string }
 
 declare module 'claude-code' {
   interface PluginState {
-    'sub-meter': { limits: Limit[]; view: number }
+    'sub-meter': { reading: Reading | null }
   }
 }
