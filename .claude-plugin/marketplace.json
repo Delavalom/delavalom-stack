@@ -17,8 +17,8 @@
     {
       "name": "sub-meter",
       "source": "./plugins/sub-meter",
-      "description": "Subscription usage at the bottom right: the 5-hour and weekly windows, and a monthly spend limit, as a bar. Vendored from midudev/better-claude (MIT).",
-      "version": "0.4.0"
+      "description": "Subscription usage at the bottom right: the 5-hour and weekly windows, and an Enterprise or Team seat's monthly budget, as a bar. Vendored from midudev/better-claude (MIT).",
+      "version": "0.5.0"
     }
   ]
 }

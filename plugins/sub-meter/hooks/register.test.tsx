@@ -12,7 +12,7 @@ const LIMITS: SessionRateLimit[] = [
 ]
 
 /** Everything beneath the mod: the clock, the store, the session's usage and what the engine draws. */
-function world (on: On, rateLimits: SessionRateLimit[] = LIMITS) {
+function world (on: On, rateLimits: SessionRateLimit[] = LIMITS, account: object | null = { extra_usage: null }) {
   const clock = mock.clock(on, { now: NOW })
   const store: Record<string, unknown> = {}
   on('store.get', ($, e) => ({ value: store[e.key] }))
@@ -23,13 +23,20 @@ function world (on: On, rateLimits: SessionRateLimit[] = LIMITS) {
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.usage', () => ({ value: { startedAt: NOW, context: { window: 200_000 }, rateLimits } as never }))
   on('session.measure', ($, e) => ({ changed: e.changed }))
+  // The account's usage, as /api/oauth/usage answers it for the session's login.
+  const fetched: string[] = []
+  on('session.authorize', () => ({ value: { handle: 'h', kind: 'bearer' } }))
+  on('http.fetch', ($, e) => {
+    fetched.push(e.url)
+    return { value: account === null ? { status: 500, ok: false, headers: {}, text: 'oops' } : { status: 200, ok: true, headers: {}, text: JSON.stringify(account) } }
+  })
   // The engine's own node, as core answers it; with mode labels, a Box the tests find.
   on('ui.render', ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
     if ('hint' in e.props) return <Text>{e.props.hint}</Text>
     return e.props.modes.length > 0 ? <Box key="engine" /> : ({ type: 'engine', ref: 0 } as const)
   })
-  return { clock, store }
+  return { clock, store, fetched }
 }
 
 const startSession = ($: Engine) => $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
@@ -242,4 +249,51 @@ test('off the terminal the meter is drawn whole', async ($, on) => {
   await startSession($)
   const ui = await $.ui.mount({ plugin: 'sub-meter', surface: 'desktop', component: 'SessionMode', props: { modes: [] }, viewport: { columns: 30, rows: 30 } })
   expect(await ui.find({ type: 'Text', text: ' ━━━━━━' })).toBeDefined()
+})
+
+// An Enterprise seat: no rate-limit windows, a monthly budget in the account's usage.
+const SEAT = { five_hour: null, seven_day: null, extra_usage: { is_enabled: true, monthly_limit: 55000, used_credits: 17288, utilization: 31.43, currency: 'USD' } }
+
+test("on a seat with a monthly budget and no windows it shows the budget, resetting on the 1st", async ($, on) => {
+  const w = world(on, [], SEAT)
+  await startSession($)
+  const ui = await footer($)
+  expect(w.fetched).toEqual(['https://api.anthropic.com/api/oauth/usage'])
+  expect(await ui.find({ type: 'Text', text: 'budget' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' 31%' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' ↻ 19d 14h' })).toBeDefined()
+  expect(w.store.limits).toEqual([{ kind: 'spend_limit', percentUsed: 31.4, resetsAt: '2026-11-01T00:00:00.000Z' }])
+})
+
+test('asks for the budget at most every five minutes', async ($, on) => {
+  const w = world(on, [], SEAT)
+  await startSession($)
+  const measure = () => $.session.measure({ context: { window: 200_000 }, rateLimits: [], changed: ['cost'] } as never)
+  await measure()
+  expect(w.fetched.length).toBe(1)
+  await w.clock.advance(5 * 60_000)
+  await measure()
+  expect(w.fetched.length).toBe(2)
+})
+
+test('on a subscription it never asks for the budget', async ($, on) => {
+  const w = world(on, LIMITS, SEAT)
+  await startSession($)
+  expect(w.fetched).toEqual([])
+})
+
+for (const [name, extra] of [['turned off', { is_enabled: false }], ['with no limit', { is_enabled: true, utilization: null }]] as const) {
+  test(`a budget ${name} leaves the footer as it is`, async ($, on) => {
+    world(on, [], { extra_usage: extra })
+    await startSession($)
+    expect(await (await footer($, ['focus'])).find({ type: 'Text', text: 'budget' })).toBeUndefined()
+  })
+}
+
+test('a failed request leaves the footer as it is', async ($, on) => {
+  world(on, [], null)
+  await startSession($)
+  const ui = await footer($, ['focus'])
+  expect(await ui.find({ key: 'engine' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'budget' })).toBeUndefined()
 })

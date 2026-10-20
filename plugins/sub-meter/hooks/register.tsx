@@ -27,9 +27,15 @@ const AROUND = 1 + SEPARATOR.length
 // (Narrator's `⏵ narrator`): what that plugin gives up where the row is short is not taken back for
 // them, so the meter only shrinks as the row does.
 const BENEATH_FLOOR = 10
+// An Enterprise or Team seat reports no rate-limit windows; its monthly budget is in the account's
+// usage, the figures /usage shows, read with the session's own login (the token never reaches here).
+const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
+const BUDGET_EVERY_MS = 5 * 60_000
 
 // The hint as last drawn on the terminal, in columns.
 let hintWidth = 0
+// When the budget was last asked for, so a busy session asks at most every BUDGET_EVERY_MS.
+let budgetAt = -Infinity
 
 /** The subscription windows the meter shows, in order, from what the engine measured. */
 const windowsOf = (rateLimits: readonly SessionRateLimit[]): Limit[] =>
@@ -87,6 +93,32 @@ async function remember ($: EngineInterface, found: Limit[]) {
   await $.store.set('limits', found)
 }
 
+/** The seat's monthly budget as a `spend_limit` window; none off a claude.ai login, without a budget, or when the request fails. */
+async function budgetOf ($: EngineInterface): Promise<Limit[]> {
+  try {
+    const auth = await $.session.authorize()
+    if (auth?.kind !== 'bearer') return []
+    const res = await $.http.fetch(USAGE_URL, { auth: auth.handle })
+    if (!res.ok) return []
+    const extra = JSON.parse(res.text)?.extra_usage
+    if (!extra?.is_enabled || typeof extra.utilization !== 'number') return []
+    const now = new Date(await $.clock.now())
+    // ponytail: the API gives no reset for the budget; the 1st of next month, UTC, is what its overage reset reports.
+    const resetsAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString()
+    return [{ kind: 'spend_limit', percentUsed: Math.round(extra.utilization * 10) / 10, resetsAt }]
+  } catch {
+    return []
+  }
+}
+
+/** Reads the budget again where the engine measured no window, at most every BUDGET_EVERY_MS. */
+async function refreshBudget ($: EngineInterface) {
+  const now = await $.clock.now()
+  if (now - budgetAt < BUDGET_EVERY_MS) return
+  budgetAt = now
+  await remember($, await budgetOf($))
+}
+
 export const register: Register = (on, options) => {
   const hideCycleHint = options.hideCycleHint !== false
   const hideInterruptHint = options.hideInterruptHint !== false
@@ -109,15 +141,18 @@ export const register: Register = (on, options) => {
     const saved = await $.store.get('limits')
     if (Array.isArray(saved)) await update($, limits, () => saved as Limit[])
 
-    const usage = await $.session.usage()
-    await remember($, windowsOf(usage.rateLimits))
+    const found = windowsOf((await $.session.usage()).rateLimits)
+    if (found.length > 0) await remember($, found)
+    else await refreshBudget($)
 
     $.clock.every(rotateMs, () => { void update($, view, n => n + 1) })
     return next(e)
   })
 
   on('session.measure', async ($, e, next) => {
-    await remember($, windowsOf(e.rateLimits))
+    const found = windowsOf(e.rateLimits)
+    if (found.length > 0) await remember($, found)
+    else await refreshBudget($)
     return next(e)
   })
 
