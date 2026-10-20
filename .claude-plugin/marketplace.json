@@ -1,0 +1,24 @@
+{
+  "name": "delavalom-stack",
+  "owner": {
+    "name": "Luis Arvelo",
+    "email": "hi@delavalom.com"
+  },
+  "metadata": {
+    "description": "Delavalom Stack: the vendored skill set, plus a few mods."
+  },
+  "plugins": [
+    {
+      "name": "delavalom-stack",
+      "source": "./",
+      "description": "Portable Claude Code skill stack: verification, review, architecture, principles, writing, infrastructure.",
+      "version": "3.1.0"
+    },
+    {
+      "name": "sub-meter",
+      "source": "./plugins/sub-meter",
+      "description": "Subscription usage at the bottom right: the 5-hour and weekly windows, and a monthly spend limit, as a bar. Vendored from midudev/better-claude (MIT).",
+      "version": "0.4.0"
+    }
+  ]
+}
