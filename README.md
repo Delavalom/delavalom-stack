@@ -209,9 +209,7 @@ Most skills here are mine. These are vendored from [cursor/plugins](https://gith
 
 They were copied because skills already in this repo referenced them by name and the references were dangling. A few still mention Cursor-specific paths (`~/.cursor/rules/pstack-models.mdc`, `.cursor/skills/`); they degrade to their documented defaults when those files are absent.
 
-`run-loop`, `adversarial-review`, `harden-the-loop`, and `principle-no-cope` are original to this repo.
-
-`plugins/sub-meter` is vendored from [midudev/better-claude](https://github.com/midudev/better-claude) at `42dd915`, MIT, copyright Miguel Ángel Durán; its license is in the plugin folder. One change from upstream: it also shows the `spend_limit` window (a monthly budget) as `budget`.
+`run-loop`, `adversarial-review`, `harden-the-loop`, `principle-no-cope`, and the `sub-meter` plugin are original to this repo.
 
 `no-use-effect` is a git submodule of [alejandrobailo/no-use-effect](https://github.com/alejandrobailo/no-use-effect). The sound effects in `brag/assets/sfx` are from [Kenney](https://kenney.nl/) (CC0).
 

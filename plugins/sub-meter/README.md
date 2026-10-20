@@ -1,46 +1,35 @@
 # Sub Meter
 
-A Claude Code mod: your subscription usage, always at the bottom right, on the same line as the permission mode.
+A Claude Code mod that shows how much of your usage is left, at the bottom right of the prompt footer.
 
 ```text
-⏵⏵ auto mode on                                   5h ━━━━━━──── 58% ↻ 2h 10m
+⏵⏵ auto mode on                        budget ███░░░░░░░ 31% · resets 19d
 ```
 
-Every 8 seconds it switches between the **5-hour** window and the **weekly** one (change it in `/config`, `rotateSeconds`). The bar turns yellow from 75% and red from 90%. After it, behind ↻, the time until that window resets.
+- **Enterprise or Team seat** (claude.ai login): your seat's monthly budget, read from the same place `/usage` reads it. It resets on the 1st of the month (UTC).
+- **Pro or Max subscription:** whichever window is closest to its limit, the 5-hour or the weekly one.
+- **API key or third-party provider:** nothing to show; the footer stays as it is.
 
-Where the footer is short it fits the row instead of breaking to a second line: first the bar goes, then the reset time, and in a very narrow terminal the meter itself. Beside [Narrator](../narrator), the meter shrinks first, then the switch.
-
-```text
-⏵⏵ auto mode on ·      5h 58% ↻ 2h 10m · ⏵ narrator on
-⏵⏵ auto mode on ·           5h 58% · ⏵ narrator
-```
-
-On a seat with a monthly spend limit (Enterprise, a Claude gateway) Claude Code reports a third window, `spend_limit`, and the meter shows it as **budget**, in turn with the others; past the limit the percent goes over 100 and the bar stays full and red. Off a subscription or a spend limit (API key billing) there is nothing to show, so the footer stays as it is.
-
-While it is on, it also drops the `(shift+tab to cycle)` hint after the permission mode and `esc to interrupt` while Claude works, to leave room for the meter. Turn either off in `/config` (`hideCycleHint`, `hideInterruptHint`).
+The bar turns yellow at 75% and red at 90%. Below 100 columns the bar and reset time drop; below 70 the meter hides.
 
 ## Install
 
 ```text
-/plugin marketplace add midudev/better-claude
-/plugin install sub-meter@better-claude
+/plugin marketplace add Delavalom/delavalom-stack
+/plugin install sub-meter@delavalom-stack
 ```
 
 ## How it works
 
-One hooks module ([`hooks/register.tsx`](hooks/register.tsx)):
+One hooks module, [`hooks/register.tsx`](hooks/register.tsx):
 
-- `session.measure` hands it the rate-limit windows after each response (`five_hour`, `seven_day`, `spend_limit`); `$.session.usage()` gives the first reading at start.
-- The last reading is kept in `$.store`, so a new session shows it before its first response.
-- A `ui.render` hook on `SessionMode` draws the meter and, after it, what is beneath (the engine's mode labels, another plugin's switch such as Narrator's, which so stays last); `$.clock.every` switches the window.
-- The room it has is the terminal's width (`e.viewport.columns`) less the footer's padding, the mode label and the hint, and less what is beneath; the meter takes the widest form that fits.
-- A `ui.render` hook on `PromptHint` rewrites the hint line without `(shift+tab to cycle)` and `esc to interrupt`, and notes its width; the engine still draws it, and the mode label before it.
+- On a subscription, the engine reports rate-limit windows at start (`$.session.usage()`) and after each response (`session.measure`). The meter shows the highest one.
+- With no windows, it calls `GET https://api.anthropic.com/api/oauth/usage` and reads `extra_usage` (`is_enabled`, `utilization`). It asks at session start, then at most every 5 minutes after a response. The request goes through `$.http.fetch` with the `$.session.authorize()` handle: the engine attaches your login for Anthropic's own host, and the token never reaches the mod. With `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` set, the request is refused and the meter keeps its last reading.
+- The last reading is kept in `$.store`, so a new session shows it right away.
 
 ## Development
 
 ```bash
-claude plugin validate ./sub-meter   # from the repository root
-claude plugin test ./sub-meter       # runs hooks/register.test.tsx against the engine
+claude plugin validate ./plugins/sub-meter
+claude plugin test ./plugins/sub-meter
 ```
-
-MIT © Miguel Ángel Durán (midudev)

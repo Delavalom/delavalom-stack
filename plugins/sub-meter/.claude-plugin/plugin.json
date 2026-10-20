@@ -1,35 +1,14 @@
 {
   "name": "sub-meter",
-  "version": "0.4.0",
-  "description": "Your subscription usage at the bottom right of Claude Code: the 5-hour and weekly windows, and a monthly spend limit, as a bar that takes turns.",
+  "version": "1.0.0",
+  "description": "Usage meter in the prompt footer: an Enterprise or Team seat's monthly budget, or a subscription's tightest rate-limit window.",
   "author": {
-    "name": "Miguel Ángel Durán (midudev)",
-    "url": "https://github.com/midudev"
+    "name": "Luis Arvelo",
+    "url": "https://github.com/Delavalom"
   },
-  "homepage": "https://github.com/midudev/better-claude",
-  "repository": "https://github.com/midudev/better-claude",
+  "homepage": "https://github.com/Delavalom/delavalom-stack/tree/main/plugins/sub-meter",
+  "repository": "https://github.com/Delavalom/delavalom-stack",
   "license": "MIT",
-  "keywords": ["usage", "subscription", "rate-limits", "status", "mod"],
-  "types": "./types/index.d.ts",
-  "userConfig": {
-    "rotateSeconds": {
-      "type": "number",
-      "title": "Seconds per window",
-      "description": "How long the meter shows each window (5-hour, weekly) before it switches to the other.",
-      "default": 8,
-      "min": 1
-    },
-    "hideCycleHint": {
-      "type": "boolean",
-      "title": "Hide the mode cycle hint",
-      "description": "Drop \"(shift+tab to cycle)\" after the permission mode, to leave room for the meter.",
-      "default": true
-    },
-    "hideInterruptHint": {
-      "type": "boolean",
-      "title": "Hide the interrupt hint",
-      "description": "Drop \"esc to interrupt\" from the hint line while Claude works, to leave room for the meter.",
-      "default": true
-    }
-  }
+  "keywords": ["usage", "budget", "enterprise", "rate-limits", "mod"],
+  "types": "./types/index.d.ts"
 }
