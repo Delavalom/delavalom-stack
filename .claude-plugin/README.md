@@ -8,7 +8,7 @@ A portable Claude Code skill set: 16 vendored skills for architecture, code arch
 - **Engineering principles**: `principle-model-the-domain`, `principle-boundary-discipline`, `principle-make-operations-idempotent`, `principle-prove-it-works`
 - **Verification & process**: `create-verification-skill`, `show-me-your-work`
 - **Writing**: `technical-writing`, `unslop`, `bro`
-- **Frontend & infrastructure**: `no-use-effect`, `clone-webapp`, `use-railway`
+- **Frontend & infrastructure**: `no-use-effect`, `craft-clone`, `use-railway`
 
 Plus a mise/starship/zsh shell setup.
 
