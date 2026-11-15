@@ -12,7 +12,7 @@
       "name": "delavalom-stack",
       "source": "./",
       "description": "Portable Claude Code skill stack: verification, review, architecture, principles, writing, infrastructure.",
-      "version": "3.1.0"
+      "version": "3.2.0"
     },
     {
       "name": "sub-meter",

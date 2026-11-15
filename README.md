@@ -73,7 +73,7 @@ The merciless-verification core. `run-loop` is the one that runs constantly; the
 | Skill | What it does |
 |-------|--------------|
 | `no-use-effect` | Always active; never write `useEffect` directly in React or React Native |
-| `clone-webapp` | Clone a live web app's frontend into a Next.js + Tailwind copy |
+| `craft-clone` | Clone any site, app or game with [Craft Anything](https://github.com/storytold/craft-anything), score it per screen width, then rebrand it into our own product (needs `craft-anything-cli`) |
 | `use-railway` | Railway projects, services, deployments, environments, troubleshooting |
 | `diagram-design` | Branded architecture, flow, and data diagrams as standalone HTML/SVG/PNG |
 

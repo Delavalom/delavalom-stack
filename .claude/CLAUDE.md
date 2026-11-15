@@ -56,7 +56,7 @@ The merciless-verification core. Reviewers must not share context or a model fam
 
 ### Frontend & infrastructure
 - **no-use-effect** — always active; never write `useEffect` directly in React or React Native
-- **clone-webapp** — clone a live web app's frontend into a Next.js + Tailwind copy
+- **craft-clone** — clone any site, app or game with Craft Anything, score it per width, then make it ours
 - **use-railway** — Railway projects, services, deployments, environments, and troubleshooting
 - **diagram-design** — branded architecture, flow, and data diagrams as standalone HTML/SVG/PNG
 
